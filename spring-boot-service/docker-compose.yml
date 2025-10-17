@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  postgresql:
+    image: postgres:14
+    container_name: artifact-postgres
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"  # Exposes PostgreSQL to localhost:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+volumes:
+    postgres_data:
