@@ -31,3 +31,41 @@ build/
 
 ### VS Code ###
 .vscode/
+# Add this line to your .gitignore
+docker/mysqll/
+
+# Ignore MySQL runtime and data files
+spring-boot-service/mysql/
+spring-boot-service/mysql/mysql.sock
+
+# Database files
+mysql/
+*.db
+*.sqlite
+*.sock
+
+# Maven
+
+*.jar
+*.war
+*.ear
+
+# IDE files
+.idea/
+
+# Eclipse
+.settings/
+
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

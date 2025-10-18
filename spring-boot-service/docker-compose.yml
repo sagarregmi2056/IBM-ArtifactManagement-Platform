@@ -1,16 +1,15 @@
-version: '3.8'
+version: '4'
+
 services:
-  postgresql:
-    image: postgres:14
-    container_name: artifact-postgres
-    environment:
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_DB: postgres
+  mysql:
+    image: mysql:8.0           # MySQL version
+    container_name: artifacts-managementdb
     ports:
-      - "5432:5432"  # Exposes PostgreSQL to localhost:5432
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: mysql
+      POSTGRES_DB: postgres
+      # root password
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./docker/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
-volumes:
-    postgres_data:
+      - ./mysql:/var/lib/mysql       # persistent data
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql

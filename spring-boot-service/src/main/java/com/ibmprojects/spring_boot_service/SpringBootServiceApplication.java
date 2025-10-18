@@ -1,4 +1,4 @@
-package com.sagarregmi.spring_boot_service;
+package com.ibmprojects.spring_boot_service;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
