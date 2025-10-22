@@ -1,15 +1,40 @@
-version: '4'
+version: "3.9"
 
 services:
   mysql:
-    image: mysql:8.0           # MySQL version
+    image: mysql:8.0
     container_name: artifacts-managementdb
     ports:
       - "3306:3306"
     environment:
       MYSQL_ROOT_PASSWORD: mysql
-      POSTGRES_DB: postgres
-      # root password
+      MYSQL_DATABASE: spring_artifacts
     volumes:
-      - ./mysql:/var/lib/mysql       # persistent data
+      - ./mysql:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  spring-boot-app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.spring
+    container_name: spring-boot-app
+    ports:
+      - "8081:8081"   # Host:Container (Spring Boot listens on 8081)
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: mysql
+      SPRING_DATASOURCE_URL: jdbc:mysql://${DB_HOST}:3306/spring_artifacts?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+    restart: always
+    volumes:
+      - ~/.m2:/root/.m2
