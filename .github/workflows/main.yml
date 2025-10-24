@@ -1,0 +1,116 @@
+name: Spring Boot CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build Spring Boot Project
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven
+        run: |
+          chmod +x ./mvnw
+          ./mvnw clean install -DskipTests
+
+  docker-build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build Docker image
+        run: |
+          docker build -f spring-boot-service/docker/Dockerfile.spring -t your-dockerhub-username/spring-boot-service:${{ github.sha }} .
+
+      - name: Push Docker image
+        run: docker push saga99/spring-boot-service:${{ github.sha }}
+
+  send-email-notification:
+    name: Send Email Notification
+    runs-on: ubuntu-latest
+    needs: docker-build-and-push
+    if: always()
+    steps:
+      - name: Get workflow status
+        id: check_status
+        run: |
+          if ${{ needs.docker-build-and-push.result == 'success' }}; then
+            echo "status=SUCCESS" >> $GITHUB_OUTPUT
+          else
+            echo "status=FAILURE" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          to: sagarregmi2056@gmail.com 
+          subject: 'CI Build Status for ${{ github.repository }} - ${{ steps.check_status.outputs.status }}'
+          body: |
+            A new CI build for your Spring Boot service has completed.
+            
+            **Repository:** ${{ github.repository }}
+            **Branch:** ${{ github.ref_name }}
+            **Commit:** ${{ github.sha }}
+            **Build Status:** ${{ steps.check_status.outputs.status }}
+            **Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            **Docker Image:** saga99/spring-boot-service:${{ github.sha }}
+            
+            Best regards,
+            GitHub Actions
+          content_type: text/html
+
+  send-discord-notification:
+    name: Send Discord Notification
+    runs-on: ubuntu-latest
+    needs: docker-build-and-push
+    if: always()
+    steps:
+      - name: Get workflow status
+        id: check_status
+        run: |
+          if ${{ needs.docker-build-and-push.result == 'success' }}; then
+            echo "status=SUCCESS" >> $GITHUB_OUTPUT
+            echo "color=65280" >> $GITHUB_OUTPUT # Green color
+          else
+            echo "status=FAILURE" >> $GITHUB_OUTPUT
+            echo "color=16711680" >> $GITHUB_OUTPUT # Red color
+
+      - name: Send Discord notification
+        uses: tsickert/discord-webhook@v1.0.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          content: |-
+            CI Build Status for `${{ github.repository }}` - `${{ steps.check_status.outputs.status }}`
+
+            **Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})
+            **Branch:** `${{ github.ref_name }}`
+            **Commit:** `${{ github.sha }}`
+            **Build Status:** `${{ steps.check_status.outputs.status }}`
+            **Workflow Run:** [View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            **Docker Image:** `your-dockerhub-username/spring-boot-service:${{ github.sha }}`
+          embed-color: ${{ steps.check_status.outputs.color }}
