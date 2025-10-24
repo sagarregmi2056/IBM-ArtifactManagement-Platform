@@ -61,6 +61,7 @@ jobs:
             ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
           cache-from: type=registry,ref=${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:cache
           cache-to: type=registry,ref=${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:cache,mode=max
+          builder: default
 
   notify:
     name: Send Discord Notification
