@@ -51,6 +51,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Set up Docker Buildx (with container driver)
+        id: buildx
         uses: docker/setup-buildx-action@v3
         with:
           install: true
@@ -69,7 +70,7 @@ jobs:
             ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
           cache-from: type=registry,ref=${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:cache
           cache-to: type=registry,ref=${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:cache,mode=max
-          builder: default
+          builder: ${{ steps.buildx.outputs.name }}
 
   notify:
     name: Send Discord Notification
