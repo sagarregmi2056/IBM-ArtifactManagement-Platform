@@ -50,6 +50,14 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
+      - name: Set up Docker Buildx (with container driver)
+        uses: docker/setup-buildx-action@v3
+        with:
+          install: true
+          driver: docker-container
+          driver-opts: |
+            image=moby/buildkit:latest
+
       - name: Build & Push Image
         uses: docker/build-push-action@v5
         with:
