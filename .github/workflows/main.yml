@@ -60,20 +60,29 @@ jobs:
       - name: Get workflow status
         id: check_status
         run: |
-         if [ "${{ needs.docker-build-and-push.result }}" == "success" ]; then
+          if [ "${{ needs.docker-build-and-push.result }}" == "success" ]; then
             echo "status=SUCCESS" >> $GITHUB_OUTPUT
-            echo "color=65280" >> $GITHUB_OUTPUT # Green color
+            echo "color=65280" >> $GITHUB_OUTPUT  # Green
           else
             echo "status=FAILURE" >> $GITHUB_OUTPUT
-            echo "color=16711680" >> $GITHUB_OUTPUT # Red color
-         fi
+            echo "color=16711680" >> $GITHUB_OUTPUT  # Red
+          fi
 
       - name: Send Discord notification
-        uses: tsickert/discord-webhook@v1.0.0
-        
-        with:
-           webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
-           username: "CI CD BOT"
-           content: "CI Build Status for ${{ github.repository }} - ${{ steps.check_status.outputs.status }} | Repo: ${{ github.repository }} | Branch: ${{ github.ref_name }} | Commit: ${{ github.sha }} | Status: ${{ steps.check_status.outputs.status }} | Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} | Docker Image: saga99/spring-boot-service:${{ github.sha }}"
+        run: |
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d '{
+                 "username": "CI CD BOT",
+                 "embeds":[
+                   {
+                     "title": "CI Build Status",
+                     "description": "**Repository:** [${GITHUB_REPOSITORY}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY})\n**Branch:** `${GITHUB_REF_NAME}`\n**Commit:** `${GITHUB_SHA}`\n**Status:** `${STATUS}`\n**Workflow Run:** [View Run](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})\n**Docker Image:** `saga99/spring-boot-service:${GITHUB_SHA}`",
+                     "color": '${COLOR}'
+                   }
+                 ]
+               }' ${{ secrets.DISCORD_WEBHOOK_URL }}
+        env:
+          STATUS: ${{ steps.check_status.outputs.status }}
+          COLOR: ${{ steps.check_status.outputs.color }}
 
-         
