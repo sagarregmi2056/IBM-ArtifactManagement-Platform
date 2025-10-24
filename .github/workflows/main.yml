@@ -25,6 +25,7 @@ jobs:
           cache: maven
 
       - name: Build with Maven
+        working-directory: ./spring-boot-service
         run: |
           chmod +x ./mvnw
           ./mvnw clean install -DskipTests
