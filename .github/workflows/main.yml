@@ -60,31 +60,13 @@ jobs:
       - name: Get workflow status
         id: check_status
         run: |
-          if ${{ needs.docker-build-and-push.result == 'success' }}; then
-            echo "status=SUCCESS" >> $GITHUB_OUTPUT
-          else
-            echo "status=FAILURE" >> $GITHUB_OUTPUT
-          fi
+           if [ "${{ needs.docker-build-and-push.result }}" == "success" ]; then
+             echo "status=SUCCESS" >> $GITHUB_OUTPUT
+            else
+             echo "status=FAILURE" >> $GITHUB_OUTPUT
+            fi
 
-      - name: Send email
-        uses: dawidd6/action-send-mail@v3
-        with:
-          to: sagarregmi2056@gmail.com 
-          subject: 'CI Build Status for ${{ github.repository }} - ${{ steps.check_status.outputs.status }}'
-          body: |
-            A new CI build for your Spring Boot service has completed.
-            
-            **Repository:** ${{ github.repository }}
-            **Branch:** ${{ github.ref_name }}
-            **Commit:** ${{ github.sha }}
-            **Build Status:** ${{ steps.check_status.outputs.status }}
-            **Workflow Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            **Docker Image:** saga99/spring-boot-service:${{ github.sha }}
-            
-            Best regards,
-            GitHub Actions
-          content_type: text/html
-
+      
   send-discord-notification:
     name: Send Discord Notification
     runs-on: ubuntu-latest
