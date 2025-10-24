@@ -66,6 +66,7 @@ jobs:
           else
             echo "status=FAILURE" >> $GITHUB_OUTPUT
             echo "color=16711680" >> $GITHUB_OUTPUT # Red color
+         fi
 
       - name: Send Discord notification
         uses: tsickert/discord-webhook@v1.0.0
