@@ -71,14 +71,7 @@ jobs:
       - name: Send Discord notification
         uses: tsickert/discord-webhook@v1.0.0
         with:
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          content: |-
-            CI Build Status for `${{ github.repository }}` - `${{ steps.check_status.outputs.status }}`
+           webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+           content: "CI Build Status for ${{ github.repository }} - ${{ steps.check_status.outputs.status }} | Repo: ${{ github.repository }} | Branch: ${{ github.ref_name }} | Commit: ${{ github.sha }} | Status: ${{ steps.check_status.outputs.status }} | Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} | Docker Image: saga99/spring-boot-service:${{ github.sha }}"
 
-            **Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})
-            **Branch:** `${{ github.ref_name }}`
-            **Commit:** `${{ github.sha }}`
-            **Build Status:** `${{ steps.check_status.outputs.status }}`
-            **Workflow Run:** [View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            **Docker Image:** `your-dockerhub-username/spring-boot-service:${{ github.sha }}`
          
