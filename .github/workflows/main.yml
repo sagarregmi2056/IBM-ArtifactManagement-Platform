@@ -81,4 +81,4 @@ jobs:
             **Build Status:** `${{ steps.check_status.outputs.status }}`
             **Workflow Run:** [View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
             **Docker Image:** `your-dockerhub-username/spring-boot-service:${{ github.sha }}`
-          embed-color: ${{ steps.check_status.outputs.color }}
+         
