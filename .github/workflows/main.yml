@@ -46,7 +46,7 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -f spring-boot-service/docker/Dockerfile.spring -t your-dockerhub-username/spring-boot-service:${{ github.sha }} .
+          docker build -f spring-boot-service/docker/Dockerfile.spring -t saga99/spring-boot-service:${{ github.sha }} ./spring-boot-service
 
       - name: Push Docker image
         run: docker push saga99/spring-boot-service:${{ github.sha }}
