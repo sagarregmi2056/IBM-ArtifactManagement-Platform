@@ -11,7 +11,8 @@ on:
 env:
   IMAGE_NAME: spring-boot-service
   SERVICE_PATH: ./spring-boot-service
-  DOCKERFILE_PATH: ${{ env.SERVICE_PATH }}/docker/Dockerfile.spring
+  DOCKERFILE_PATH: ./spring-boot-service/docker/Dockerfile.spring
+
 
 jobs:
   build:
