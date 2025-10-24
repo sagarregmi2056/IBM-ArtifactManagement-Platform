@@ -70,8 +70,10 @@ jobs:
 
       - name: Send Discord notification
         uses: tsickert/discord-webhook@v1.0.0
+        
         with:
            webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
+           username: "CI CD BOT"
            content: "CI Build Status for ${{ github.repository }} - ${{ steps.check_status.outputs.status }} | Repo: ${{ github.repository }} | Branch: ${{ github.ref_name }} | Commit: ${{ github.sha }} | Status: ${{ steps.check_status.outputs.status }} | Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} | Docker Image: saga99/spring-boot-service:${{ github.sha }}"
 
          
