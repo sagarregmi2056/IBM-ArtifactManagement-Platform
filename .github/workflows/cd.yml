@@ -128,25 +128,57 @@ jobs:
 
           echo "🚀 Deploying Spring Boot app with image: ${IMAGE_NAME}"
           
-          if ! oc get dc/spring-boot-app >/dev/null 2>&1; then
-            echo "🆕 Creating new deployment..."
-            cat openshift/spring-boot-deployment.yaml | sed "s|saga99/spring-boot-service:latest|${IMAGE_NAME}|g" | oc apply -f -
-          fi
+          echo "🔄 Updating deployment configuration..."
+          
+          # First update the environment variables
+          oc set env dc/spring-boot-app \
+            SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/spring_artifacts?createDatabaseIfNotExist=true \
+            SPRING_DATASOURCE_USERNAME=${{ secrets.MYSQL_USERNAME }} \
+            SPRING_DATASOURCE_PASSWORD=${{ secrets.MYSQL_PASSWORD }} \
+            SERVER_PORT=8081
 
+          # Update the image and trigger a new deployment
+          echo "🚀 Updating container image to: ${IMAGE_NAME}"
+          oc patch dc/spring-boot-app -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"spring-boot-app\",\"image\":\"${IMAGE_NAME}\"}]}}}}"
+          
+          # Cancel any existing rollouts
+          echo "🔄 Cancelling any existing rollouts..."
+          oc rollout cancel dc/spring-boot-app 2>/dev/null || true
+          
+          # Start a fresh rollout
+          echo "🔄 Starting new rollout..."
+          oc rollout latest dc/spring-boot-app
+          
+          # Wait for rollout with better error handling
           echo "⏳ Waiting for deployment to be ready..."
           if ! oc rollout status dc/spring-boot-app --timeout=300s; then
-            echo "❌ Deployment failed. Checking status..."
+            echo "❌ Deployment failed. Gathering debug information..."
+            
+            echo "📋 Events in the last 5 minutes:"
+            oc get events --sort-by='.lastTimestamp' | tail -n 20
+            
             echo "📋 DeploymentConfig Status:"
-            oc get dc/spring-boot-app -o yaml
+            oc describe dc/spring-boot-app
+            
             echo "📋 Pod Status:"
             oc get pods -l deploymentconfig=spring-boot-app
-            echo "📋 Latest Pod Logs:"
-            POD_NAME=$(oc get pods -l deploymentconfig=spring-boot-app -o jsonpath='{.items[-1:].metadata.name}')
-            oc logs $POD_NAME --tail=50
-            echo "📋 Pod Events:"
-            oc get events --field-selector involvedObject.kind=Pod,involvedObject.name=$POD_NAME
+            
+            # Try to get logs from any failed pods
+            FAILED_PODS=$(oc get pods -l deploymentconfig=spring-boot-app --field-selector status.phase!=Running -o name)
+            if [ ! -z "$FAILED_PODS" ]; then
+              echo "📋 Logs from failed pods:"
+              for pod in $FAILED_PODS; do
+                echo "=== Logs from $pod ==="
+                oc logs $pod --previous || oc logs $pod || echo "No logs available"
+                echo "=== Pod Description ==="
+                oc describe $pod
+              done
+            fi
+            
             exit 1
           fi
+          
+          echo "✅ Deployment successfully rolled out"
           
           echo "🔧 Updating deployment configuration..."
           # Update environment variables
