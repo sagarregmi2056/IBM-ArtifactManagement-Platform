@@ -525,31 +525,44 @@ jobs:
             STATUS="✅ Success"
             COLOR=3066993
             
-            # Get route information
+            # Get route information safely using grep/awk
             echo "🔍 Getting route details..."
-            # Get complete route information
-            echo "Getting route configuration..."
-            oc get route spring-boot-route -o yaml
             
-            # Get the actual host without any redaction
-            ROUTE_HOST=$(oc get route spring-boot-route -o jsonpath='{.spec.host}' --allow-missing-template-keys=false)
-            ROUTE_TLS=$(oc get route spring-boot-route -o jsonpath='{.spec.tls}' --allow-missing-template-keys=false)
+            # Get route configuration
+            ROUTE_CONFIG=$(oc get route spring-boot-route -o yaml)
+            echo "Route Configuration:"
+            echo "$ROUTE_CONFIG"
             
-            # Determine protocol (default to https for OpenShift routes)
-            if [ ! -z "$ROUTE_TLS" ]; then
+            # Extract host using grep/awk
+            ROUTE_HOST=$(echo "$ROUTE_CONFIG" | grep "^  host:" | awk '{print $2}')
+            if [ -z "$ROUTE_HOST" ]; then
+              echo "⚠️ Could not get route host"
+              ROUTE_HOST="N/A"
+            fi
+            
+            # Check for TLS using grep
+            if echo "$ROUTE_CONFIG" | grep -q "tls:"; then
+              echo "🔒 TLS is configured"
               PROTOCOL="https"
             else
-              # Check if route is exposed on HTTPS by default
-              if oc get route spring-boot-route -o jsonpath='{.spec.to.kind}' | grep -q "Service"; then
+              # Check if exposed via Service
+              if echo "$ROUTE_CONFIG" | grep -q "kind: Service"; then
+                echo "🔒 Route exposed via Service, using HTTPS"
                 PROTOCOL="https"
               else
+                echo "🔓 No TLS configuration, using HTTP"
                 PROTOCOL="http"
               fi
             fi
             
-            # Construct full URL and verify it's not redacted
-            FULL_URL="${PROTOCOL}://${ROUTE_HOST}"
-            echo "🌐 Constructed URL: ${FULL_URL}"
+            # Build URL if we have a valid host
+            if [ "$ROUTE_HOST" != "N/A" ]; then
+              FULL_URL="${PROTOCOL}://${ROUTE_HOST}"
+              echo "🌐 Constructed URL: ${FULL_URL}"
+            else
+              FULL_URL="N/A"
+              echo "⚠️ Could not construct URL"
+            fi
             
             # Verify route is accessible
             echo "🔍 Verifying route accessibility..."
@@ -560,22 +573,46 @@ jobs:
               echo "⚠️ Route accessibility check returned: $ROUTE_STATUS"
             fi
             
-            # Get pod status and metrics
+            # Get pod status and metrics safely
             echo "🔍 Getting deployment metrics..."
-            POD_NAME=$(oc get pods -l app=spring-boot-app --sort-by=.metadata.creationTimestamp -o name | tail -1 | sed 's|pod/||' || echo "")
+            
+            # Get pod information using grep/awk for reliability
+            POD_INFO=$(oc get pods -l app=spring-boot-app --sort-by=.metadata.creationTimestamp)
+            POD_NAME=$(echo "$POD_INFO" | tail -1 | awk '{print $1}')
             
             if [ ! -z "$POD_NAME" ]; then
               echo "📊 Getting metrics for pod: $POD_NAME"
-              POD_STATUS=$(oc get pod $POD_NAME -o jsonpath='{.status.phase}' || echo "N/A")
-              CPU_USAGE=$(oc adm top pod $POD_NAME --use-protocol-buffers -o json | jq -r '.items[0].usage.cpu' || echo "N/A")
-              MEMORY_USAGE=$(oc adm top pod $POD_NAME --use-protocol-buffers -o json | jq -r '.items[0].usage.memory' || echo "N/A")
               
-              # Get health status
-              HEALTH_STATUS=$(oc exec $POD_NAME -- curl -s http://localhost:8081/actuator/health | jq -r '.status' || echo "N/A")
-              RESPONSE_CODE=$(oc exec $POD_NAME -- curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/actuator/health || echo "N/A")
+              # Get pod status
+              POD_STATUS=$(oc get pod $POD_NAME -o yaml | grep "phase:" | awk '{print $2}')
+              if [ -z "$POD_STATUS" ]; then
+                POD_STATUS="Unknown"
+              fi
+              
+              # Get resource usage
+              echo "Getting resource usage..."
+              TOP_OUTPUT=$(oc adm top pod $POD_NAME --use-protocol-buffers 2>/dev/null || echo "")
+              if [ ! -z "$TOP_OUTPUT" ]; then
+                CPU_USAGE=$(echo "$TOP_OUTPUT" | tail -1 | awk '{print $2}')
+                MEMORY_USAGE=$(echo "$TOP_OUTPUT" | tail -1 | awk '{print $3}')
+              else
+                CPU_USAGE="N/A"
+                MEMORY_USAGE="N/A"
+              fi
+              
+              # Get health status if pod is running
+              if [ "$POD_STATUS" = "Running" ]; then
+                echo "Checking health status..."
+                HEALTH_CHECK=$(oc exec $POD_NAME -- curl -s http://localhost:8081/actuator/health || echo '{"status":"N/A"}')
+                HEALTH_STATUS=$(echo "$HEALTH_CHECK" | grep -o '"status":"[^"]*"' | cut -d'"' -f4 || echo "N/A")
+                RESPONSE_CODE=$(oc exec $POD_NAME -- curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/actuator/health || echo "N/A")
+              else
+                HEALTH_STATUS="Not Ready"
+                RESPONSE_CODE="N/A"
+              fi
             else
               echo "⚠️ No pods found"
-              POD_STATUS="N/A"
+              POD_STATUS="No Pods"
               CPU_USAGE="N/A"
               MEMORY_USAGE="N/A"
               HEALTH_STATUS="N/A"
