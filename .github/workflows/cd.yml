@@ -2,13 +2,12 @@ name: Spring Boot CD to OpenShift
 
 
 
-
-
 # Watches your CI pipeline named "Spring Boot CI"
 
 # Triggers automatically when CI completes successfully on main branch
 
 # This creates the CI → CD chain
+
 on:
   workflow_run:
     workflows: ["Spring Boot CI"]
@@ -23,14 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
 
-# Gets your OpenShift YAML files from repository
 
+
+    # Gets your OpenShift YAML files from repository
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-
-# Authenticates with OpenShift cluster using secrets
+  # Authenticates with OpenShift cluster using secrets
       - name: Log in to OpenShift
         uses: redhat-actions/oc-login@v1
         with:
@@ -38,30 +37,10 @@ jobs:
           openshift_token: ${{ secrets.OPENSHIFT_TOKEN }}
           namespace: ${{ secrets.OPENSHIFT_PROJECT }}
 
-      # --- 1. Create Secrets for Both MySQL and Spring Boot ---
 
-# OpenShift Cluster
-# │
-# ├── Namespace: your-project
-# │   ├── Secret: mysql-root-secret
-# │   │   ├── MYSQL_ROOT_PASSWORD: "actual-password-here"
-# │   │   └── MYSQL_DATABASE: "spring_artifacts"
-# │   │
-# │   └── Secret: mysql-secret
-# │       ├── SPRING_DATASOURCE_URL: "jdbc:mysql://mysql-service:3306/spring_artifacts..."
-# │       ├── SPRING_DATASOURCE_USERNAME: "app-username"
-# │       ├── SPRING_DATASOURCE_PASSWORD: "app-password"
-# │       └── SERVER_PORT: "8081"
-
-
-
-
-
-
+            # --- 1. Create Secrets for Both MySQL and Spring Boot ---
       - name: Create MySQL Secrets
         run: |
-          # Secret for MySQL deployment itself
-          # Stores MySQL root password and database name for MySQL container in mysql-root-secret
           if ! oc get secret mysql-root-secret >/dev/null 2>&1; then
             echo "🔐 Creating MySQL root secret..."
             oc create secret generic mysql-root-secret \
@@ -71,8 +50,6 @@ jobs:
             echo "✅ MySQL root secret already exists"
           fi
 
-          # Secret for Spring Boot application - UPDATED for Spring properties
-          # Stores Spring Boot database connection details and server port
           if ! oc get secret mysql-secret >/dev/null 2>&1; then
             echo "🔐 Creating MySQL application secret..."
             oc create secret generic mysql-secret \
@@ -84,25 +61,21 @@ jobs:
             echo "✅ MySQL application secret already exists"
           fi
 
-      # --- 2. Bootstrap Infrastructure ---
-
-
-#       Creates MySQL Persistent Volume Claim (storage)
-
-# Deploys MySQL container
-
-# Creates MySQL service (network access)
-
-# Waits for MySQL to be fully ready
+      # --- 2. Deploy MySQL Database and Create Route for Spring Boot ---
+        # Deploy MySQL database if it doesn't exist
+        # Create route for Spring Boot if it doesn't exist
+        # Set environment variables for Spring Boot
+        # Deploy Spring Boot application if it doesn't exist
+        # Wait for rollout to complete
+        # Verify deployment
+        # Send Discord notification
       - name: Bootstrap Environment
         run: |
-          # Deploy MySQL if not exists
           if ! oc get deployment/mysql >/dev/null 2>&1; then
             echo "🔧 Deploying MySQL database..."
             oc apply -f openshift/mysql/mysql-pvc.yaml
             oc apply -f openshift/mysql/mysql-deployment.yaml
             oc apply -f openshift/mysql/mysql-service.yaml
-            
             echo "⏳ Waiting for MySQL to be ready..."
             oc wait --for=condition=ready pod -l app=mysql --timeout=300s
             echo "✅ MySQL is ready"
@@ -110,7 +83,6 @@ jobs:
             echo "✅ MySQL already deployed"
           fi
 
-          # Create Spring Boot service and route if not exists
           if ! oc get route spring-boot-route >/dev/null 2>&1; then
             echo "🔧 Creating Spring Boot services..."
             oc apply -f openshift/spring-boot-service.yaml
@@ -120,7 +92,7 @@ jobs:
             echo "✅ Spring Boot services already exist"
           fi
 
-      # --- 3. Deploy Spring Boot App with Specific Image ---
+      # --- 3. Deploy Spring Boot Application ---
       - name: Deploy Spring Boot Application
         run: |
           COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
@@ -129,36 +101,28 @@ jobs:
 
           echo "🚀 Deploying Spring Boot app with image: ${IMAGE_NAME}"
           
-          # Set environment variables from secrets
-          echo "🔧 Setting environment variables from secrets..."
           oc set env dc/spring-boot-app \
             SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/spring_artifacts?createDatabaseIfNotExist=true \
             SPRING_DATASOURCE_USERNAME=${{ secrets.MYSQL_USERNAME }} \
             SPRING_DATASOURCE_PASSWORD=${{ secrets.MYSQL_PASSWORD }} \
             SERVER_PORT=8081
           
-          # Check if deployment exists, create or update accordingly
           if oc get dc/spring-boot-app >/dev/null 2>&1; then
             echo "🔄 Updating existing deployment..."
             oc set image dc/spring-boot-app spring-boot-app=${IMAGE_NAME} --record=true
             oc rollout latest dc/spring-boot-app
           else
             echo "🆕 Creating new deployment..."
-            # Create deployment with the specific image
             cat openshift/spring-boot-deployment.yaml | sed "s|saga99/spring-boot-service:latest|${IMAGE_NAME}|g" | oc apply -f -
           fi
 
-      # --- 4. Wait for Rollout with Health Checks ---
       - name: Wait for Rollout
         run: |
           echo "⏳ Waiting for rollout to complete..."
           oc rollout status dc/spring-boot-app --timeout=600s
-          
-          # Wait for pod to be fully ready (not just running)
           echo "🔍 Waiting for application to be fully ready..."
           oc wait --for=condition=ready pod -l app=spring-boot-app --timeout=300s
 
-      # --- 5. Comprehensive Verification ---
       - name: Verify Deployment
         run: |
           ROUTE_URL=$(oc get route spring-boot-route -o jsonpath='{.spec.host}')
@@ -169,16 +133,13 @@ jobs:
           echo "📦 Running Pod: ${POD_NAME}"
           echo "🗄️ MySQL Pod: ${MYSQL_POD}"
           
-          # Store values for notification
           echo "ROUTE_URL=https://${ROUTE_URL}" >> $GITHUB_ENV
           echo "APP_POD=${POD_NAME}" >> $GITHUB_ENV
           echo "MYSQL_POD=${MYSQL_POD}" >> $GITHUB_ENV
           
-          # Check application logs
           echo "📋 Application logs (last 10 lines):"
           oc logs ${POD_NAME} --tail=10
           
-          # Test health endpoint
           echo "🔍 Testing health endpoint..."
           if oc exec ${POD_NAME} -- curl -s http://localhost:8081/actuator/health > /dev/null; then
             echo "✅ Health check passed"
@@ -189,7 +150,6 @@ jobs:
             exit 1
           fi
           
-          # Test if application responds
           echo "🔍 Testing application response..."
           RESPONSE_CODE=$(oc exec ${POD_NAME} -- curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/actuator/health || echo "000")
           if [ "$RESPONSE_CODE" = "200" ]; then
@@ -201,7 +161,6 @@ jobs:
             exit 1
           fi
 
-      # --- 6. Final Status Report ---
       - name: Deployment Status
         run: |
           echo "🎉 DEPLOYMENT SUMMARY"
@@ -218,97 +177,51 @@ jobs:
     needs: deploy-to-openshift
     if: always()
     steps:
-      - name: Build JSON Payload
-        id: payload
-        run: |
-          # Determine status and color
-          STATUS="SUCCESS"
-          COLOR=65280  # Green
-          if [ "${{ needs.deploy-to-openshift.result }}" != "success" ]; then
-            STATUS="FAILURE"
-            COLOR=16711680  # Red
-          fi
-          
-          # Get additional deployment info
-          ROUTE_URL="${{ env.ROUTE_URL }}"
-          APP_POD="${{ env.APP_POD }}"
-          MYSQL_POD="${{ env.MYSQL_POD }}"
-          HEALTH_STATUS="${{ env.HEALTH_STATUS }}"
-          RESPONSE_CODE="${{ env.RESPONSE_CODE }}"
-          
-          # Build description with all deployment details
-          DESCRIPTION="**Repository:** [${{ github.repository }}](${{ github.repository }})
-**Branch:** ${{ github.ref_name }}
-**Commit:** ${{ github.sha }}
-**Deployment Status:** $STATUS
-**Health Check:** ${HEALTH_STATUS:-UNKNOWN}
-**Response Code:** ${RESPONSE_CODE:-UNKNOWN}
-**Workflow Run:** [View Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
-**🌐 Application URL:** [$ROUTE_URL]($ROUTE_URL)
-**📦 Application Pod:** ${APP_POD:-UNKNOWN}
-**🗄️ MySQL Pod:** ${MYSQL_POD:-UNKNOWN}
-**🐳 Docker Image:** saga99/spring-boot-service:${{ github.sha }}
-
-**📊 Database Information:**
-• **Host:** mysql-service
-• **Database:** spring_artifacts
-• **Username:** ${{ secrets.MYSQL_USERNAME }}
-• **Port:** 3306
-
-**🛠️ OpenShift Project:** ${{ secrets.OPENSHIFT_PROJECT }}"
-
-          jq -n \
-            --arg status "$STATUS" \
-            --argjson color "$COLOR" \
-            --arg description "$DESCRIPTION" \
-            '{
-              username: "OpenShift CD Bot",
-              embeds: [
-                {
-                  title: "🚀 CD Deployment Status: \($status)",
-                  description: $description,
-                  color: $color,
-                  timestamp: (now | strftime("%Y-%m-%dT%H:%M:%SZ")),
-                  footer: {
-                    text: "Deployed via GitHub Actions"
-                  },
-                  fields: [
-                    {
-                      name: "📊 Deployment Info",
-                      value: "Status: \($status)\nHealth: '"${HEALTH_STATUS:-UNKNOWN}"'\nResponse: '"${RESPONSE_CODE:-UNKNOWN}"'",
-                      inline: true
-                    },
-                    {
-                      name: "🌐 Access",
-                      value: "URL: [Open Application]('"${ROUTE_URL}"')\nProject: '"${{ secrets.OPENSHIFT_PROJECT }}"'",
-                      inline: true
-                    }
-                  ]
-                }
-              ]
-            }' > payload.json
-
-          # Debug: Show payload content
-          echo "📋 Notification payload:"
-          cat payload.json
-
       - name: Send Discord Notification
         run: |
-          echo "📤 Sending Discord notification..."
-          curl -H "Content-Type: application/json" \
-               -X POST \
-               -d @payload.json \
-               "${{ secrets.DISCORD_WEBHOOK_URL }}"
-          
-          if [ $? -eq 0 ]; then
-            echo "✅ Discord notification sent successfully"
+          # Determine status and color
+          if [ "${{ needs.deploy-to-openshift.result }}" == "success" ]; then
+            STATUS="✅ SUCCESS"
+            COLOR=65280
+            EMOJI="🎉"
           else
-            echo "❌ Failed to send Discord notification"
-            exit 1
+            STATUS="❌ FAILED" 
+            COLOR=16711680
+            EMOJI="💥"
           fi
 
-  # Optional: Pre-deployment notification
+          # Get deployment info
+          ROUTE_URL="${{ env.ROUTE_URL }}"
+          
+          # Simple message
+          MESSAGE="$EMOJI **Deployment $STATUS**
+          
+          **Repository:** ${{ github.repository }}
+          **Application:** ${{ github.repository }}
+          **Branch:** ${{ github.ref_name }}
+          **Commit:** ${GITHUB_SHA:0:7}
+
+          **🌐 URL:** $ROUTE_URL
+          **📊 Health:** ${{ env.HEALTH_STATUS }}
+
+          **View Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          # Send to Discord
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d "{
+                 \"username\": \"OpenShift CD Bot\",
+                 \"embeds\": [{
+                   \"title\": \"CD Deployment - $STATUS\",
+                   \"description\": \"$MESSAGE\",
+                   \"color\": $COLOR,
+                   \"timestamp\": \"$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")\"
+                 }]
+               }" \
+               "${{ secrets.DISCORD_WEBHOOK_URL }}"
+          
+          echo "✅ Discord notification sent"
+
   notify-start:
     name: Notify Deployment Start
     runs-on: ubuntu-latest
@@ -330,3 +243,25 @@ jobs:
                  ]
                }' \
                "${{ secrets.DISCORD_WEBHOOK_URL }}"
+
+
+
+
+
+
+
+
+
+
+# OpenShift Cluster
+# │
+# ├── Namespace: your-project
+# │   ├── Secret: mysql-root-secret
+# │   │   ├── MYSQL_ROOT_PASSWORD: "actual-password-here"
+# │   │   └── MYSQL_DATABASE: "spring_artifacts"
+# │   │
+# │   └── Secret: mysql-secret
+# │       ├── SPRING_DATASOURCE_URL: "jdbc:mysql://mysql-service:3306/spring_artifacts..."
+# │       ├── SPRING_DATASOURCE_USERNAME: "app-username"
+# │       ├── SPRING_DATASOURCE_PASSWORD: "app-password"
+# │       └── SERVER_PORT: "8081"
