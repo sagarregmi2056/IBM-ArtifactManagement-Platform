@@ -381,10 +381,15 @@ jobs:
           oc get route spring-boot-route
           
           echo "📋 Verifying route details..."
-          ROUTE_HOST=$(oc get route spring-boot-route -o jsonpath='{.spec.host}')
-          ROUTE_PATH=$(oc get route spring-boot-route -o jsonpath='{.spec.path}')
-          ROUTE_PORT=$(oc get route spring-boot-route -o jsonpath='{.spec.port.targetPort}')
-          ROUTE_TLS=$(oc get route spring-boot-route -o jsonpath='{.spec.tls}')
+          # Get complete route configuration
+          echo "Route Configuration:"
+          oc get route spring-boot-route -o yaml
+          
+          # Get route details without redaction
+          ROUTE_HOST=$(oc get route spring-boot-route -o jsonpath='{.spec.host}' --allow-missing-template-keys=false)
+          ROUTE_PATH=$(oc get route spring-boot-route -o jsonpath='{.spec.path}' --allow-missing-template-keys=false)
+          ROUTE_PORT=$(oc get route spring-boot-route -o jsonpath='{.spec.port.targetPort}' --allow-missing-template-keys=false)
+          ROUTE_TLS=$(oc get route spring-boot-route -o jsonpath='{.spec.tls}' --allow-missing-template-keys=false)
           
           # Construct proper URL with protocol
           if [ ! -z "$ROUTE_TLS" ]; then
@@ -489,6 +494,41 @@ jobs:
             STATUS="✅ Success"
             COLOR=3066993
             
+            # Get route information
+            echo "🔍 Getting route details..."
+            # Get complete route information
+            echo "Getting route configuration..."
+            oc get route spring-boot-route -o yaml
+            
+            # Get the actual host without any redaction
+            ROUTE_HOST=$(oc get route spring-boot-route -o jsonpath='{.spec.host}' --allow-missing-template-keys=false)
+            ROUTE_TLS=$(oc get route spring-boot-route -o jsonpath='{.spec.tls}' --allow-missing-template-keys=false)
+            
+            # Determine protocol (default to https for OpenShift routes)
+            if [ ! -z "$ROUTE_TLS" ]; then
+              PROTOCOL="https"
+            else
+              # Check if route is exposed on HTTPS by default
+              if oc get route spring-boot-route -o jsonpath='{.spec.to.kind}' | grep -q "Service"; then
+                PROTOCOL="https"
+              else
+                PROTOCOL="http"
+              fi
+            fi
+            
+            # Construct full URL and verify it's not redacted
+            FULL_URL="${PROTOCOL}://${ROUTE_HOST}"
+            echo "🌐 Constructed URL: ${FULL_URL}"
+            
+            # Verify route is accessible
+            echo "🔍 Verifying route accessibility..."
+            ROUTE_STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" "${FULL_URL}/actuator/health" || echo "Failed")
+            if [ "$ROUTE_STATUS" = "200" ]; then
+              echo "✅ Route is accessible"
+            else
+              echo "⚠️ Route accessibility check returned: $ROUTE_STATUS"
+            fi
+            
             # Get pod status and metrics
             echo "🔍 Getting deployment metrics..."
             POD_NAME=$(oc get pods -l app=spring-boot-app --sort-by=.metadata.creationTimestamp -o name | tail -1 | sed 's|pod/||' || echo "")
@@ -498,11 +538,17 @@ jobs:
               POD_STATUS=$(oc get pod $POD_NAME -o jsonpath='{.status.phase}' || echo "N/A")
               CPU_USAGE=$(oc adm top pod $POD_NAME --use-protocol-buffers -o json | jq -r '.items[0].usage.cpu' || echo "N/A")
               MEMORY_USAGE=$(oc adm top pod $POD_NAME --use-protocol-buffers -o json | jq -r '.items[0].usage.memory' || echo "N/A")
+              
+              # Get health status
+              HEALTH_STATUS=$(oc exec $POD_NAME -- curl -s http://localhost:8081/actuator/health | jq -r '.status' || echo "N/A")
+              RESPONSE_CODE=$(oc exec $POD_NAME -- curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/actuator/health || echo "N/A")
             else
               echo "⚠️ No pods found"
               POD_STATUS="N/A"
               CPU_USAGE="N/A"
               MEMORY_USAGE="N/A"
+              HEALTH_STATUS="N/A"
+              RESPONSE_CODE="N/A"
             fi
           else
             STATUS="❌ Failed"
@@ -510,6 +556,9 @@ jobs:
             POD_STATUS="Failed"
             CPU_USAGE="N/A"
             MEMORY_USAGE="N/A"
+            HEALTH_STATUS="Failed"
+            RESPONSE_CODE="N/A"
+            FULL_URL="N/A"
           fi
           
           # Send to Discord with enhanced information
@@ -519,7 +568,7 @@ jobs:
                  "username": "OpenShift CD Bot",
                  "embeds": [{
                    "title": "'"Deployment: $STATUS"'",
-                   "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n**Commit:** `${{ github.sha }}`\n\n**🌐 Application URL:** ${{ env.ROUTE_URL }}\n**🏥 Health Status:** `${{ env.HEALTH_STATUS }}`\n**🔄 Response Code:** `${{ env.RESPONSE_CODE }}`\n\n**📊 Pod Status:** `'"$POD_STATUS"'`\n**💻 CPU Usage:** `'"$CPU_USAGE"'`\n**💾 Memory Usage:** `'"$MEMORY_USAGE"'`\n\n**📝 Deployment Notes:**\n• Spring Boot application is running on port 8081\n• MySQL database is connected and migrations are complete\n• Health checks are passing\n• Monitoring endpoints are available at /actuator/*",
+                   "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n**Commit:** `${{ github.sha }}`\n\n**🌐 Application URL:** `'"$FULL_URL"'`\n**🏥 Health Status:** `'"$HEALTH_STATUS"'`\n**🔄 Response Code:** `'"$RESPONSE_CODE"'`\n\n**📊 Pod Status:** `'"$POD_STATUS"'`\n**💻 CPU Usage:** `'"$CPU_USAGE"'`\n**💾 Memory Usage:** `'"$MEMORY_USAGE"'`\n\n**📝 Deployment Notes:**\n• Spring Boot application is running on port 8081\n• MySQL database is connected and migrations are complete\n• Health checks are passing\n• Monitoring endpoints are available at /actuator/*\n\n**🔗 Quick Links:**\n• Health Check: `'"$FULL_URL"'/actuator/health`\n• Metrics: `'"$FULL_URL"'/actuator/metrics`\n• Info: `'"$FULL_URL"'/actuator/info`",
                    "color": '"$COLOR"',
                    "footer": {
                      "text": "Deployment completed at '"$(date -u "+%Y-%m-%d %H:%M:%S UTC")"'"
