@@ -467,21 +467,50 @@ jobs:
     needs: deploy-to-openshift
     if: always()
     steps:
+      - name: Install OpenShift CLI
+        run: |
+          echo "📥 Installing OpenShift CLI..."
+          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/oc/latest/linux/oc.tar.gz -o oc.tar.gz
+          tar -xzf oc.tar.gz
+          sudo mv oc /usr/local/bin/
+          sudo chmod +x /usr/local/bin/oc
+          echo "✅ OpenShift CLI installed"
+
+      - name: Log in to OpenShift
+        uses: redhat-actions/oc-login@v1
+        with:
+          openshift_server_url: ${{ secrets.OPENSHIFT_SERVER_URL }}
+          openshift_token: ${{ secrets.OPENSHIFT_TOKEN }}
+          namespace: ${{ secrets.OPENSHIFT_PROJECT }}
+
       - name: Send Discord Notification
         run: |
-        
           if [ "${{ needs.deploy-to-openshift.result }}" == "success" ]; then
             STATUS="✅ Success"
             COLOR=3066993
+            
+            # Get pod status and metrics
+            echo "🔍 Getting deployment metrics..."
+            POD_NAME=$(oc get pods -l app=spring-boot-app --sort-by=.metadata.creationTimestamp -o name | tail -1 | sed 's|pod/||' || echo "")
+            
+            if [ ! -z "$POD_NAME" ]; then
+              echo "📊 Getting metrics for pod: $POD_NAME"
+              POD_STATUS=$(oc get pod $POD_NAME -o jsonpath='{.status.phase}' || echo "N/A")
+              CPU_USAGE=$(oc adm top pod $POD_NAME --use-protocol-buffers -o json | jq -r '.items[0].usage.cpu' || echo "N/A")
+              MEMORY_USAGE=$(oc adm top pod $POD_NAME --use-protocol-buffers -o json | jq -r '.items[0].usage.memory' || echo "N/A")
+            else
+              echo "⚠️ No pods found"
+              POD_STATUS="N/A"
+              CPU_USAGE="N/A"
+              MEMORY_USAGE="N/A"
+            fi
           else
             STATUS="❌ Failed"
             COLOR=15158332
+            POD_STATUS="Failed"
+            CPU_USAGE="N/A"
+            MEMORY_USAGE="N/A"
           fi
-
-          # Get pod status for notification
-          POD_STATUS=$(oc get pods -l app=spring-boot-app --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].status.phase}')
-          CPU_USAGE=$(oc adm top pod $(oc get pods -l app=spring-boot-app --sort-by=.metadata.creationTimestamp -o name | tail -1 | sed 's|pod/||') --use-protocol-buffers -o json | jq -r '.items[0].usage.cpu' || echo "N/A")
-          MEMORY_USAGE=$(oc adm top pod $(oc get pods -l app=spring-boot-app --sort-by=.metadata.creationTimestamp -o name | tail -1 | sed 's|pod/||') --use-protocol-buffers -o json | jq -r '.items[0].usage.memory' || echo "N/A")
           
           # Send to Discord with enhanced information
           curl -H "Content-Type: application/json" \
