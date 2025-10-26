@@ -11,7 +11,7 @@ on:
 
 jobs:
   setup-monitoring:
-    name: Deploy Prometheus & Grafana
+    name: Configure Service Monitoring
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     
@@ -55,71 +55,33 @@ jobs:
             echo "⚠️ OpenShift monitoring not available in this environment"
             echo "ℹ️ Application metrics endpoint is still accessible at /actuator/prometheus"
           fi
+
+      - name: Verify Metrics Endpoint
+        run: |
+          echo "🔍 Verifying metrics endpoint..."
           
-          # Verify metrics endpoint is working
+          # Get pod name
           POD_NAME=$(oc get pods -l app=spring-boot-app --no-headers -o custom-columns=":metadata.name" | head -n 1)
+          
           if [ ! -z "$POD_NAME" ]; then
-            echo "🔍 Checking metrics endpoint..."
-            if oc exec $POD_NAME -- curl -s http://localhost:8081/actuator/prometheus >/dev/null; then
-              echo "✅ Metrics endpoint is responding"
+            echo "📊 Testing metrics endpoint..."
+            METRICS=$(oc exec $POD_NAME -- curl -s http://localhost:8081/actuator/prometheus)
+            if [ $? -eq 0 ]; then
+              echo "✅ Metrics endpoint is working"
+              echo "📊 Sample metrics available:"
+              echo "$METRICS" | grep -E "^(jvm_memory|http_server_requests)" | head -n 5
+              
+              # Store pod URL for notification
+              POD_URL="http://$(oc get route spring-boot-route -o jsonpath='{.spec.host}')"
+              echo "POD_URL=$POD_URL" >> $GITHUB_ENV
             else
-              echo "⚠️ Metrics endpoint check failed. Please verify application configuration"
+              echo "⚠️ Could not access metrics endpoint"
+              exit 1
             fi
-          fi
-
-      - name: Create Grafana Secrets
-        run: |
-          if ! oc get secret grafana-secrets >/dev/null 2>&1; then
-            echo "🔐 Creating Grafana secrets..."
-            oc create secret generic grafana-secrets \
-              --from-literal=admin-user=admin \
-              --from-literal=admin-password=${{ secrets.GRAFANA_ADMIN_PASSWORD }}
           else
-            echo "✅ Grafana secrets exist"
-          fi
-
-      - name: Configure Service Monitoring
-        run: |
-          echo "🚀 Setting up service monitoring..."
-          oc apply -f openshift/monitoring/servicemonitor.yaml
-          
-          echo "✅ Service monitoring configured"
-
-      - name: Verify Monitoring Stack
-        run: |
-          echo "🔍 Verifying deployments..."
-          
-          # Check Prometheus
-          PROMETHEUS_POD=$(oc get pod -l app=prometheus -o name | head -1)
-          if [ ! -z "$PROMETHEUS_POD" ]; then
-            echo "✅ Prometheus is running"
-            echo "📊 Checking Prometheus targets..."
-            oc exec $PROMETHEUS_POD -- curl -s http://localhost:9090/api/v1/targets
-          else
-            echo "❌ Prometheus not found"
+            echo "⚠️ No application pods found"
             exit 1
           fi
-          
-          # Check Grafana
-          GRAFANA_POD=$(oc get pod -l app=grafana -o name | head -1)
-          if [ ! -z "$GRAFANA_POD" ]; then
-            echo "✅ Grafana is running"
-            echo "🔍 Checking Grafana health..."
-            oc exec $GRAFANA_POD -- curl -s http://localhost:3000/api/health
-          else
-            echo "❌ Grafana not found"
-            exit 1
-          fi
-
-      - name: Get Access URLs
-        run: |
-          echo "🌐 Access URLs:"
-          echo "Prometheus: $(oc get route prometheus -o jsonpath='{.spec.host}')"
-          echo "Grafana: $(oc get route grafana -o jsonpath='{.spec.host}')"
-          
-          # Store URLs for notification
-          echo "PROMETHEUS_URL=$(oc get route prometheus -o jsonpath='{.spec.host}')" >> $GITHUB_ENV
-          echo "GRAFANA_URL=$(oc get route grafana -o jsonpath='{.spec.host}')" >> $GITHUB_ENV
 
       - name: Send Discord Notification
         if: always()
@@ -138,7 +100,7 @@ jobs:
                  "username": "Monitoring Bot",
                  "embeds": [{
                    "title": "Monitoring Setup: '"$STATUS"'",
-                   "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n\n**🔍 Monitoring URLs:**\n• Prometheus: `http://${{ env.PROMETHEUS_URL }}`\n• Grafana: `http://${{ env.GRAFANA_URL }}`\n\n**📝 Default Credentials:**\n• Username: `admin`\n• Password: `${{ secrets.GRAFANA_ADMIN_PASSWORD }}`\n\n**📊 Available Dashboards:**\n• Spring Boot Metrics\n• MySQL Metrics\n• JVM Statistics",
+                   "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n\n**📊 Metrics Available At:**\n• Application: `${{ env.POD_URL }}/actuator/prometheus`\n• Health: `${{ env.POD_URL }}/actuator/health`\n\n**📝 Note:**\nMetrics are available directly from the application endpoint. You can view them in the OpenShift console under Monitoring → Metrics when proper permissions are granted.",
                    "color": '"$COLOR"'
                  }]
                }' \
