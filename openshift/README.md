@@ -76,7 +76,157 @@ graph TD
     end
 ```
 
-### 5. Secret Management
+### 5. Container Architecture
+
+This diagram shows the internal architecture of our containers:
+- **Spring Boot Container**: Shows how the application connects to MySQL, manages migrations, and exposes metrics
+- **MySQL Container**: Shows storage engine, persistence, and resource limits
+- **Resource Allocation**: Details CPU, memory, and storage limits for both containers
+- **Health Probes**: Shows how OpenShift monitors container health
+```mermaid
+graph TD
+    subgraph Spring Boot Container
+        A[Spring Boot App] -->|Uses| B[Hikari Pool]
+        B -->|Connects| C[MySQL Client]
+        A -->|Exposes| D[Actuator Endpoints]
+        A -->|Uses| E[Flyway Migration]
+        E -->|Manages| F[DB Schema]
+        
+        subgraph Resources
+            G[CPU: 500m]
+            H[Memory: 1Gi]
+            I[Port: 8081]
+        end
+        
+        subgraph Probes
+            J[Liveness: /actuator/health]
+            K[Readiness: /actuator/health]
+        end
+    end
+    
+    subgraph MySQL Container
+        L[MySQL Server] -->|Uses| M[InnoDB Engine]
+        M -->|Writes| N[PVC Storage]
+        L -->|Exposes| O[Port 3306]
+        
+        subgraph MySQL Resources
+            P[CPU: 500m]
+            Q[Memory: 1Gi]
+            R[Storage: 1Gi]
+        end
+    end
+```
+
+### 6. Deployment States
+
+The state diagram shows the complete deployment lifecycle:
+- **CI Phase**: From code push through image building
+- **CD Phase**: Environment validation and deployment
+- **Health Checks**: Verification of deployment success
+- **Rollback**: Automatic recovery from failures
+- **Success States**: Final successful deployment conditions
+```mermaid
+stateDiagram-v2
+    [*] --> CodePush
+    CodePush --> CIBuild: Push to main
+    CIBuild --> ImageBuild: Tests pass
+    ImageBuild --> ImagePush: Build success
+    ImagePush --> CDTrigger: Image available
+    
+    CDTrigger --> ValidateEnv: Start deployment
+    ValidateEnv --> CreateSecrets: Missing secrets
+    ValidateEnv --> DeployMySQL: Secrets exist
+    
+    CreateSecrets --> DeployMySQL
+    DeployMySQL --> WaitMySQL: Apply configs
+    WaitMySQL --> DeployApp: MySQL ready
+    
+    DeployApp --> WaitApp: Apply new image
+    WaitApp --> HealthCheck: Pod running
+    HealthCheck --> RouteCheck: Health OK
+    RouteCheck --> [*]: Route accessible
+    
+    HealthCheck --> RollBack: Health failed
+    RollBack --> PreviousVersion
+    PreviousVersion --> [*]
+```
+
+### 7. Monitoring Architecture
+
+The monitoring architecture shows how metrics are collected and exposed:
+- **Application Level**: Spring Boot Actuator endpoints and their purposes
+- **Container Level**: OpenShift's built-in monitoring capabilities
+- **Resource Metrics**: CPU, memory, and network monitoring
+- **Health Checks**: Application and database health monitoring
+- **Custom Metrics**: Application-specific metrics tracking
+```mermaid
+graph TD
+    subgraph Application Metrics
+        A[Actuator Endpoints] -->|Exposes| B[Health]
+        A -->|Exposes| C[Metrics]
+        A -->|Exposes| D[Info]
+        
+        B -->|Reports| E[DB Health]
+        B -->|Reports| F[App Health]
+        B -->|Reports| G[Disk Space]
+        
+        C -->|Tracks| H[JVM Metrics]
+        C -->|Tracks| I[HTTP Metrics]
+        C -->|Tracks| J[Custom Metrics]
+    end
+    
+    subgraph OpenShift Monitoring
+        K[Kubelet] -->|Collects| L[Container Metrics]
+        M[cAdvisor] -->|Provides| N[Resource Usage]
+        O[Prometheus] -->|Scrapes| P[Metrics API]
+        
+        L -->|Shows| Q[CPU Usage]
+        L -->|Shows| R[Memory Usage]
+        L -->|Shows| S[Network I/O]
+    end
+```
+
+### 8. Code Deployment Flow
+
+The code deployment flow shows how code changes move through the system:
+- **Development**: Local changes to repository
+- **CI Process**: Testing, building, and packaging
+- **CD Process**: Deployment and traffic management
+- **Container Lifecycle**: Application startup sequence
+- **Zero-Downtime**: How traffic is managed during updates
+```mermaid
+graph TD
+    subgraph Developer Machine
+        A[Code Changes] -->|Git Push| B[GitHub]
+    end
+    
+    subgraph CI Pipeline
+        B -->|Trigger| C[Run Tests]
+        C -->|Success| D[Build JAR]
+        D -->|Package| E[Docker Build]
+        E -->|Push| F[Docker Registry]
+    end
+    
+    subgraph CD Pipeline
+        F -->|Trigger| G[Update Image]
+        G -->|Rolling Update| H[Deploy Config]
+        
+        subgraph Deployment Process
+            H -->|Create| I[New Pod]
+            I -->|Health OK| J[Route Traffic]
+            J -->|Success| K[Remove Old Pod]
+        end
+    end
+    
+    subgraph Container Lifecycle
+        L[Init Container] -->|Setup| M[Main Container]
+        M -->|Start| N[Spring Boot]
+        N -->|Run| O[Flyway Migration]
+        O -->|Start| P[Application]
+    end
+```
+
+### 9. Secret Management
 ```mermaid
 graph TD
     A[GitHub Secrets] -->|Used by| B[CD Pipeline]
