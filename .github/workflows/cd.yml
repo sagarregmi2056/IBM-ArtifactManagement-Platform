@@ -123,8 +123,9 @@ jobs:
       - name: Deploy Spring Boot Application
         run: |
           COMMIT_SHA="${{ github.event.workflow_run.head_sha }}"
-          SHORT_SHA="${COMMIT_SHA:0:7}"
-          IMAGE_NAME="saga99/spring-boot-service:${SHORT_SHA}"
+          # Use full image name with registry
+          IMAGE_NAME="${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/spring-boot-service:${COMMIT_SHA}"
+          echo "📦 Full image name: ${IMAGE_NAME}"
 
           echo "🚀 Deploying Spring Boot app with image: ${IMAGE_NAME}"
           
@@ -182,6 +183,13 @@ jobs:
           
           # Wait for rollout with better error handling
           echo "⏳ Waiting for deployment to be ready..."
+          
+          # Show current pods before rollout
+          echo "📊 Current pods before rollout:"
+          oc get pods -l deploymentconfig=spring-boot-app --sort-by=.metadata.creationTimestamp
+          
+          # Start monitoring the rollout
+          echo "🔄 Starting rollout monitoring..."
           if ! oc rollout status dc/spring-boot-app --timeout=300s; then
             echo "❌ Deployment failed. Gathering debug information..."
             
@@ -193,6 +201,20 @@ jobs:
             
             echo "📋 Pod Status:"
             oc get pods -l deploymentconfig=spring-boot-app
+            
+            # Show pod logs if any exist
+            FAILED_POD=$(oc get pods -l deploymentconfig=spring-boot-app --sort-by=.metadata.creationTimestamp -o name | tail -n1)
+            if [ ! -z "$FAILED_POD" ]; then
+              echo "📋 Latest Pod Logs:"
+              oc logs $FAILED_POD || echo "No logs available"
+            fi
+            
+            exit 1
+          fi
+          
+          # Show final pod status
+          echo "📊 Final pod status:"
+          oc get pods -l deploymentconfig=spring-boot-app --sort-by=.metadata.creationTimestamp
             
             # Try to get logs from any failed pods
             FAILED_PODS=$(oc get pods -l deploymentconfig=spring-boot-app --field-selector status.phase!=Running -o name)
