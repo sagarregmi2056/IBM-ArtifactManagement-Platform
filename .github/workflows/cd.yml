@@ -212,9 +212,27 @@ jobs:
             exit 1
           fi
           
-          # Show final pod status
+          # Show final pod status and detailed logs
           echo "📊 Final pod status:"
           oc get pods -l deploymentconfig=spring-boot-app --sort-by=.metadata.creationTimestamp
+          
+          # Get the latest pod
+          LATEST_POD=$(oc get pods -l deploymentconfig=spring-boot-app --sort-by=.metadata.creationTimestamp -o name | tail -n1)
+          if [ ! -z "$LATEST_POD" ]; then
+            echo "📋 Detailed Pod Description:"
+            oc describe $LATEST_POD
+            
+            echo "📋 Full Pod Logs (with previous if available):"
+            oc logs $LATEST_POD --previous || echo "No previous logs available"
+            echo "--- Current Logs ---"
+            oc logs $LATEST_POD || echo "No current logs available"
+            
+            echo "📋 Environment Variables:"
+            oc exec $LATEST_POD -- env || echo "Could not get environment variables"
+            
+            echo "📋 MySQL Connection Test:"
+            oc exec $LATEST_POD -- curl -v mysql:3306 || echo "Could not connect to MySQL"
+          fi
             
             # Try to get logs from any failed pods
             FAILED_PODS=$(oc get pods -l deploymentconfig=spring-boot-app --field-selector status.phase!=Running -o name)
