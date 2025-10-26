@@ -205,34 +205,51 @@ jobs:
             # Show pod logs if any exist
             FAILED_POD=$(oc get pods -l deploymentconfig=spring-boot-app --sort-by=.metadata.creationTimestamp -o name | tail -n1)
             if [ ! -z "$FAILED_POD" ]; then
-            echo "📋 Pod Startup Analysis:"
+            # Get the actual pod name without the prefix
+            POD_NAME=$(echo $FAILED_POD | sed 's|pod/||')
+            echo "📋 Pod Startup Analysis for $POD_NAME"
             
             echo "1. Pod Description:"
-            oc describe pod $FAILED_POD
+            oc describe pod $POD_NAME
             
             echo "2. Previous Pod Logs (if any):"
-            oc logs $FAILED_POD --previous || echo "No previous logs available"
+            oc logs $POD_NAME --previous || echo "No previous logs available"
             
             echo "3. Current Pod Logs:"
-            oc logs $FAILED_POD || echo "No current logs available"
+            oc logs $POD_NAME || echo "No current logs available"
             
             echo "4. Container Status:"
-            oc get pod $FAILED_POD -o json | jq '.status.containerStatuses[].state'
+            oc get pod $POD_NAME -o jsonpath='{.status.containerStatuses[0].state}{"\n"}' || echo "Could not get container status"
             
-            echo "5. Resource Usage:"
-            oc adm top pod $FAILED_POD || echo "Resource metrics not available"
+            echo "5. Last State (if restarted):"
+            oc get pod $POD_NAME -o jsonpath='{.status.containerStatuses[0].lastState}{"\n"}' || echo "No last state available"
             
-            echo "6. Spring Boot Health Check:"
-            oc exec $FAILED_POD -- curl -v localhost:8081/actuator/health || echo "Health check failed"
+            echo "6. MySQL Status Check:"
+            echo "MySQL Service:"
+            oc get service mysql
+            echo "MySQL Pod:"
+            oc get pods -l app=mysql
             
-            echo "7. Database Connection Test:"
-            oc exec $FAILED_POD -- curl -v mysql:3306 || echo "MySQL connection failed"
+            echo "7. Application Checks:"
+            if oc get pod $POD_NAME | grep -q "Running"; then
+              echo "Testing Spring Boot Application..."
+              echo "a) Environment Variables:"
+              oc exec $POD_NAME -- env | grep -i "SPRING\|MYSQL\|DATABASE" || echo "No relevant environment variables found"
+              
+              echo "b) Application Properties:"
+              oc exec $POD_NAME -- cat /app/BOOT-INF/classes/application.yml || echo "Could not read application.yml"
+              
+              echo "c) MySQL Connection:"
+              oc exec $POD_NAME -- curl -v mysql:3306 || echo "MySQL connection failed"
+              
+              echo "d) Health Check:"
+              oc exec $POD_NAME -- curl -v localhost:8081/actuator/health || echo "Health check failed"
+            else
+              echo "Pod not in Running state - skipping application checks"
+            fi
             
-            echo "8. Application Properties:"
-            oc exec $FAILED_POD -- cat /app/BOOT-INF/classes/application.yml || echo "Could not read application.yml"
-            
-            echo "9. Environment Variables:"
-            oc exec $FAILED_POD -- env | grep -i "SPRING\|MYSQL\|DATABASE" || echo "No relevant environment variables found"
+            echo "8. Recent Events for this Pod:"
+            oc get events --field-selector involvedObject.name=$POD_NAME --sort-by='.lastTimestamp' | tail -n 10
             fi
             
             exit 1
