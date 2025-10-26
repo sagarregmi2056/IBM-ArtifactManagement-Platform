@@ -20,13 +20,13 @@ PostgreSQL → Spring Boot → React Dashboard
 - Performance comparison (Spring Boot vs Quarkus)
 
 ## 🛠️ Tech Stack
-- **Backend**: Spring Boot 3.2 + Quarkus 3.8 + Java 21
+- **Backend**: Spring Boot 3.2 + Quarkus 3.8 + Java 19
 - **AI Service**: Node.js + LangChain + Vector DB
 - **Frontend**: React + IBM Carbon Design
 - **Infrastructure**: OpenShift + Tekton + PostgreSQL
 - **AI**: IBM Watsonx + OpenAI
 
-![Java](https://img.shields.io/badge/Java-21-blue)
+![Java](https://img.shields.io/badge/Java-19-blue)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.2-green)
 ![Quarkus](https://img.shields.io/badge/Quarkus-3.8-red)
 ![IBM](https://img.shields.io/badge/IBM-OpenShift-blue)
