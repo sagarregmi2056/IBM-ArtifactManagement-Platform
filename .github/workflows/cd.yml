@@ -128,26 +128,40 @@ jobs:
 
           echo "🚀 Deploying Spring Boot app with image: ${IMAGE_NAME}"
           
-          echo "🔄 Updating deployment configuration..."
+          echo "🔄 Checking deployment status..."
           
-          # First update the environment variables
+          # Check if there's a rollout in progress
+          ROLLOUT_STATUS=$(oc rollout status dc/spring-boot-app --watch=false 2>/dev/null)
+          if [[ $ROLLOUT_STATUS == *"in progress"* ]]; then
+            echo "⏳ Found in-progress rollout, waiting for it to complete..."
+            if ! oc rollout status dc/spring-boot-app --timeout=60s; then
+              echo "❌ Previous rollout stuck, attempting to cancel..."
+              oc rollout cancel dc/spring-boot-app
+              sleep 5
+            fi
+          fi
+          
+          echo "🔄 Updating deployment configuration..."
+          # Update the image first
+          echo "🚀 Updating container image to: ${IMAGE_NAME}"
+          oc patch dc/spring-boot-app -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"spring-boot-app\",\"image\":\"${IMAGE_NAME}\"}]}}}}"
+          
+          # Then update environment variables
+          echo "🔧 Setting environment variables..."
           oc set env dc/spring-boot-app \
             SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/spring_artifacts?createDatabaseIfNotExist=true \
             SPRING_DATASOURCE_USERNAME=${{ secrets.MYSQL_USERNAME }} \
             SPRING_DATASOURCE_PASSWORD=${{ secrets.MYSQL_PASSWORD }} \
             SERVER_PORT=8081
-
-          # Update the image and trigger a new deployment
-          echo "🚀 Updating container image to: ${IMAGE_NAME}"
-          oc patch dc/spring-boot-app -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"spring-boot-app\",\"image\":\"${IMAGE_NAME}\"}]}}}}"
           
-          # Cancel any existing rollouts
-          echo "🔄 Cancelling any existing rollouts..."
-          oc rollout cancel dc/spring-boot-app 2>/dev/null || true
-          
-          # Start a fresh rollout
-          echo "🔄 Starting new rollout..."
-          oc rollout latest dc/spring-boot-app
+          # Trigger new rollout only if needed
+          CURRENT_IMAGE=$(oc get dc/spring-boot-app -o jsonpath='{.spec.template.spec.containers[0].image}')
+          if [ "$CURRENT_IMAGE" != "$IMAGE_NAME" ]; then
+            echo "🔄 Starting new rollout..."
+            oc rollout latest dc/spring-boot-app
+          else
+            echo "✅ Image is already up to date"
+          fi
           
           # Wait for rollout with better error handling
           echo "⏳ Waiting for deployment to be ready..."
