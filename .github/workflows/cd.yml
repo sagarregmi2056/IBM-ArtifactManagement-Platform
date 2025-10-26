@@ -315,11 +315,12 @@ jobs:
             
             echo "6. Resource Usage:"
             echo "Pod Resources:"
-            oc adm top pod $LATEST_POD || echo "Resource metrics not available"
+            POD_NAME_ONLY=$(echo $LATEST_POD | sed 's|pod/||')
+            oc adm top pod $POD_NAME_ONLY || echo "Resource metrics not available"
             echo "Memory Usage:"
-            oc exec $LATEST_POD -- free -h || echo "Memory info not available"
+            oc exec $POD_NAME_ONLY -- free -h || echo "Memory info not available"
             echo "Disk Usage:"
-            oc exec $LATEST_POD -- df -h || echo "Disk info not available"
+            oc exec $POD_NAME_ONLY -- df -h || echo "Disk info not available"
           fi
             
             # Try to get logs from any failed pods
@@ -327,10 +328,11 @@ jobs:
             if [ ! -z "$FAILED_PODS" ]; then
               echo "📋 Logs from failed pods:"
               for pod in $FAILED_PODS; do
-                echo "=== Logs from $pod ==="
-                oc logs $pod --previous || oc logs $pod || echo "No logs available"
+                POD_NAME_ONLY=$(echo $pod | sed 's|pod/||')
+                echo "=== Logs from $POD_NAME_ONLY ==="
+                oc logs $POD_NAME_ONLY --previous || oc logs $POD_NAME_ONLY || echo "No logs available"
                 echo "=== Pod Description ==="
-                oc describe $pod
+                oc describe pod/$POD_NAME_ONLY
               done
             fi
             
