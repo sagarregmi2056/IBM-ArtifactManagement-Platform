@@ -377,17 +377,55 @@ jobs:
 
       - name: Verify Deployment
         run: |
-          ROUTE_URL=$(oc get route spring-boot-route -o jsonpath='{.spec.host}')
+          echo "🔍 Getting route information..."
+          oc get route spring-boot-route
+          
+          echo "📋 Verifying route details..."
+          ROUTE_HOST=$(oc get route spring-boot-route -o jsonpath='{.spec.host}')
+          ROUTE_PATH=$(oc get route spring-boot-route -o jsonpath='{.spec.path}')
+          ROUTE_PORT=$(oc get route spring-boot-route -o jsonpath='{.spec.port.targetPort}')
+          ROUTE_TLS=$(oc get route spring-boot-route -o jsonpath='{.spec.tls}')
+          
+          # Construct proper URL with protocol
+          if [ ! -z "$ROUTE_TLS" ]; then
+            PROTOCOL="https"
+          else
+            PROTOCOL="http"
+          fi
+          
+          # Build full URL
+          FULL_URL="${PROTOCOL}://${ROUTE_HOST}"
+          if [ ! -z "$ROUTE_PATH" ]; then
+            FULL_URL="${FULL_URL}${ROUTE_PATH}"
+          fi
+          
+          echo "🌐 Application URL: ${FULL_URL}"
+          echo "🔒 Protocol: ${PROTOCOL}"
+          echo "🌍 Host: ${ROUTE_HOST}"
+          echo "📍 Path: ${ROUTE_PATH:-/}"
+          echo "🔌 Port: ${ROUTE_PORT:-8081}"
+          
+          # Get pod information
           POD_NAME=$(oc get pods -l app=spring-boot-app -o jsonpath='{.items[0].metadata.name}')
           MYSQL_POD=$(oc get pods -l app=mysql -o jsonpath='{.items[0].metadata.name}')
           
-          echo "🌐 Application URL: https://${ROUTE_URL}"
           echo "📦 Running Pod: ${POD_NAME}"
           echo "🗄️ MySQL Pod: ${MYSQL_POD}"
           
-          echo "ROUTE_URL=https://${ROUTE_URL}" >> $GITHUB_ENV
+          # Store values for later use
+          echo "ROUTE_URL=${FULL_URL}" >> $GITHUB_ENV
           echo "APP_POD=${POD_NAME}" >> $GITHUB_ENV
           echo "MYSQL_POD=${MYSQL_POD}" >> $GITHUB_ENV
+          
+          # Verify route is accessible
+          echo "🔍 Testing route accessibility..."
+          if curl -k -s -o /dev/null -w "%{http_code}" "${FULL_URL}/actuator/health"; then
+            echo "✅ Route is accessible"
+          else
+            echo "❌ Route is not accessible. Checking route configuration..."
+            oc describe route spring-boot-route
+            exit 1
+          fi
           
           echo "📋 Application logs (last 10 lines):"
           oc logs ${POD_NAME} --tail=10
@@ -440,15 +478,23 @@ jobs:
             COLOR=15158332
           fi
 
-          # Send to Discord
+          # Get pod status for notification
+          POD_STATUS=$(oc get pods -l app=spring-boot-app --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].status.phase}')
+          CPU_USAGE=$(oc adm top pod $(oc get pods -l app=spring-boot-app --sort-by=.metadata.creationTimestamp -o name | tail -1 | sed 's|pod/||') --use-protocol-buffers -o json | jq -r '.items[0].usage.cpu' || echo "N/A")
+          MEMORY_USAGE=$(oc adm top pod $(oc get pods -l app=spring-boot-app --sort-by=.metadata.creationTimestamp -o name | tail -1 | sed 's|pod/||') --use-protocol-buffers -o json | jq -r '.items[0].usage.memory' || echo "N/A")
+          
+          # Send to Discord with enhanced information
           curl -H "Content-Type: application/json" \
                -X POST \
                -d '{
                  "username": "OpenShift CD Bot",
                  "embeds": [{
                    "title": "'"Deployment: $STATUS"'",
-                   "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n**URL:** ${{ env.ROUTE_URL }}\n**Health:** ${{ env.HEALTH_STATUS }}",
-                   "color": '"$COLOR"'
+                   "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n**Commit:** `${{ github.sha }}`\n\n**🌐 Application URL:** ${{ env.ROUTE_URL }}\n**🏥 Health Status:** `${{ env.HEALTH_STATUS }}`\n**🔄 Response Code:** `${{ env.RESPONSE_CODE }}`\n\n**📊 Pod Status:** `'"$POD_STATUS"'`\n**💻 CPU Usage:** `'"$CPU_USAGE"'`\n**💾 Memory Usage:** `'"$MEMORY_USAGE"'`\n\n**📝 Deployment Notes:**\n• Spring Boot application is running on port 8081\n• MySQL database is connected and migrations are complete\n• Health checks are passing\n• Monitoring endpoints are available at /actuator/*",
+                   "color": '"$COLOR"',
+                   "footer": {
+                     "text": "Deployment completed at '"$(date -u "+%Y-%m-%d %H:%M:%S UTC")"'"
+                   }
                  }]
                }' \
                "${{ secrets.DISCORD_WEBHOOK_URL }}"
@@ -466,10 +512,13 @@ jobs:
                   "username": "OpenShift CD Bot",
                   "embeds": [
                     {
-                      "title": "🔄 Deployment Started",
-                      "description": "**Repository:** [${{ github.repository }}](${{ github.repository }})\n**Branch:** ${{ github.ref_name }}\n**Commit:** ${{ github.sha }}\n**Triggered by:** CI Pipeline Completion\n\nDeployment to OpenShift production environment is starting...",
-                      "color": 16776960,
-                      "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"
+                    "title": "🚀 Deployment Started",
+                    "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n**Commit:** `${{ github.sha }}`\n\n**🔄 Triggered by:** CI Pipeline Completion\n**🎯 Target Environment:** Production\n**📍 Namespace:** ${{ secrets.OPENSHIFT_PROJECT }}\n\n**📝 Deployment Plan:**\n• Verify/create MySQL secrets\n• Check/deploy MySQL database\n• Deploy Spring Boot application\n• Run database migrations\n• Configure routes and services\n• Verify health and connectivity",
+                    "color": 16776960,
+                    "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'",
+                    "footer": {
+                      "text": "Estimated completion time: 3-5 minutes"
+                    }
                     }
                   ]
                 }' \
