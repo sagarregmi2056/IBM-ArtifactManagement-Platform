@@ -10,7 +10,7 @@
 - **AI Service**: [Coming Soon]
 
 ## 🏗️ Architecture
-PostgreSQL → Spring Boot → React Dashboard
+MySQL → Spring Boot → React Dashboard
 → Quarkus → Node.js AI Service → Vector DB
 
 ## 🎯 Features
