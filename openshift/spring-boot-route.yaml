@@ -1,0 +1,14 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  labels:
+    app: spring-boot-app
+  name: spring-boot-route        # ← CHANGE THIS
+spec:
+  port:
+    targetPort: 8081             # ✅ Correct (numeric port)
+  to:
+    kind: Service
+    name: spring-boot-app        # ✅ Correct service name
+    weight: 100
+  wildcardPolicy: None

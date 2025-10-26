@@ -1,0 +1,44 @@
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  labels:
+    app: mysql
+  name: mysql
+spec:
+  replicas: 1
+  selector:
+    app: mysql
+    deploymentconfig: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+        deploymentconfig: mysql
+    spec:
+      containers:
+        - env:
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  key: MYSQL_DATABASE
+                  name: mysql-root-secret
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: MYSQL_ROOT_PASSWORD
+                  name: mysql-root-secret
+          image: mysql:8.0
+          name: mysql
+          ports:
+            - containerPort: 3306
+              protocol: TCP
+          resources: {}
+          volumeMounts:
+            - mountPath: /var/lib/mysql
+              name: mysql-data
+      volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: mysql-pvc
+  triggers:
+    - type: ConfigChange

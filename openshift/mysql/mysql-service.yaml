@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: mysql
+  name: mysql              # ← Service name: "mysql"
+spec:
+  ports:
+    - name: 3306-tcp
+      port: 3306           # ← Service exposes port 3306
+      protocol: TCP
+      targetPort: 3306     # ← Forwards to container port 3306
+  selector:
+    app: mysql             # ← Finds pods with label "app: mysql"
+    deploymentconfig: mysql
+  type: ClusterIP          # ← Internal-only service
+
+
+#   Spring Boot App → mysql:3306 → MySQL Service(mysql)  → MySQL Pod (Port 3306)
+#      ↓              ↓              ↓               ↓
+# "Connect to       Service        Routes to      Actual MySQL
+# mysql:3306"       Name          MySQL Pod      Container
