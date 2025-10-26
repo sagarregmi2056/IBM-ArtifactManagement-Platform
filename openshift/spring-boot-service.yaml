@@ -3,19 +3,17 @@ kind: Service
 metadata:
   labels:
     app: spring-boot-app
-  name: spring-boot-app          # ← Service name
+  name: spring-boot-app
 spec:
   ports:
-    - name: 8081
-      port: 8081                 # ← Service exposes port 8081
+    - name: http
+      port: 8081
       protocol: TCP
-      targetPort: 8081           # ← Forwards to container port 8081
+      targetPort: 8081
   selector:
-    app: spring-boot-app         # ← Finds pods with this label
+    app: spring-boot-app
     deploymentconfig: spring-boot-app
-  type: ClusterIP                # ← Internal-only service
-
-
+  type: ClusterIP
 
 #   OpenShift Route → spring-boot-app:8081 → Spring Boot Service → Spring Boot Pod (Port 8081)
 #       ↓                 ↓                    ↓                     ↓
