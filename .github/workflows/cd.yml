@@ -130,26 +130,22 @@ jobs:
           
           if ! oc get dc/spring-boot-app >/dev/null 2>&1; then
             echo "🆕 Creating new deployment..."
-            # Create initial deployment
             cat openshift/spring-boot-deployment.yaml | sed "s|saga99/spring-boot-service:latest|${IMAGE_NAME}|g" | oc apply -f -
-            
-            echo "⏳ Waiting for initial deployment to be created..."
-            sleep 5
-            
-            echo "⏳ Waiting for initial deployment to start..."
-            oc rollout status dc/spring-boot-app --timeout=300s || {
-              echo "❌ Initial deployment failed. Checking status..."
-              oc get dc/spring-boot-app
-              oc describe dc/spring-boot-app
-              exit 1
-            }
           fi
-          
-          # Check if a deployment is in progress
-          DEPLOY_STATUS=$(oc get dc/spring-boot-app -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}')
-          if [ "$DEPLOY_STATUS" == "True" ]; then
-            echo "⏳ Waiting for current deployment to complete..."
-            oc rollout status dc/spring-boot-app --timeout=300s
+
+          echo "⏳ Waiting for deployment to be ready..."
+          if ! oc rollout status dc/spring-boot-app --timeout=300s; then
+            echo "❌ Deployment failed. Checking status..."
+            echo "📋 DeploymentConfig Status:"
+            oc get dc/spring-boot-app -o yaml
+            echo "📋 Pod Status:"
+            oc get pods -l deploymentconfig=spring-boot-app
+            echo "📋 Latest Pod Logs:"
+            POD_NAME=$(oc get pods -l deploymentconfig=spring-boot-app -o jsonpath='{.items[-1:].metadata.name}')
+            oc logs $POD_NAME --tail=50
+            echo "📋 Pod Events:"
+            oc get events --field-selector involvedObject.kind=Pod,involvedObject.name=$POD_NAME
+            exit 1
           fi
           
           echo "🔧 Updating deployment configuration..."
