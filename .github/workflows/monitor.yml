@@ -35,18 +35,37 @@ jobs:
           openshift_token: ${{ secrets.OPENSHIFT_TOKEN }}
           namespace: ${{ secrets.OPENSHIFT_PROJECT }}
 
-      - name: Configure OpenShift Monitoring
+      - name: Configure Service Monitoring
         run: |
-          echo "🔧 Using OpenShift built-in monitoring..."
+          echo "🔧 Setting up service monitoring..."
           
-          # Enable user workload monitoring
-          oc patch configmap cluster-monitoring-config -n openshift-monitoring --type=merge --patch='{"data":{"config.yaml":"enableUserWorkload: true"}}'
+          # Check if monitoring is available
+          if oc get namespace openshift-monitoring >/dev/null 2>&1; then
+            echo "✅ OpenShift monitoring namespace exists"
+            
+            # Try to apply ServiceMonitor
+            if oc apply -f openshift/monitoring/servicemonitor.yaml; then
+              echo "✅ ServiceMonitor created successfully"
+            else
+              echo "⚠️ Could not create ServiceMonitor. This might be due to sandbox limitations."
+              echo "ℹ️ Your application metrics will still be available at /actuator/prometheus"
+              echo "ℹ️ You can view them directly or set up monitoring when you have more permissions"
+            fi
+          else
+            echo "⚠️ OpenShift monitoring not available in this environment"
+            echo "ℹ️ Application metrics endpoint is still accessible at /actuator/prometheus"
+          fi
           
-          # Wait for user workload monitoring to be ready
-          echo "⏳ Waiting for monitoring operators..."
-          oc wait --for=condition=ready pod -l app.kubernetes.io/component=prometheus -n openshift-user-workload-monitoring --timeout=300s
-          
-          echo "✅ OpenShift monitoring configured"
+          # Verify metrics endpoint is working
+          POD_NAME=$(oc get pods -l app=spring-boot-app --no-headers -o custom-columns=":metadata.name" | head -n 1)
+          if [ ! -z "$POD_NAME" ]; then
+            echo "🔍 Checking metrics endpoint..."
+            if oc exec $POD_NAME -- curl -s http://localhost:8081/actuator/prometheus >/dev/null; then
+              echo "✅ Metrics endpoint is responding"
+            else
+              echo "⚠️ Metrics endpoint check failed. Please verify application configuration"
+            fi
+          fi
 
       - name: Create Grafana Secrets
         run: |
