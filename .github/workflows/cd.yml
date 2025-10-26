@@ -289,38 +289,37 @@ jobs:
             echo "📋 Environment Variables:"
             oc exec $LATEST_POD -- env || echo "Could not get environment variables"
             
-            echo "📋 MySQL Status Check:"
-            echo "1. MySQL Service:"
-            oc get service mysql
+            echo "📋 Application Health Check:"
+            echo "1. Spring Boot Status:"
+            oc exec $LATEST_POD -- curl -s http://localhost:8081/actuator/health || echo "Health check endpoint not accessible"
             
-            echo "2. MySQL Pod Status:"
-            oc get pods -l app=mysql
+            echo "2. Database Connectivity:"
+            oc exec $LATEST_POD -- curl -s http://localhost:8081/actuator/health/db || echo "Database health check not accessible"
             
-            echo "3. MySQL Connection Test:"
-            oc exec $LATEST_POD -- curl -v mysql:3306 || echo "Could not connect to MySQL"
+            echo "3. Application Logs:"
+            oc logs $LATEST_POD --tail=50
             
-            echo "4. Database Configuration:"
-            oc exec $LATEST_POD -- env | grep -i mysql || echo "No MySQL environment variables found"
-            oc exec $LATEST_POD -- cat /app/BOOT-INF/classes/application.yml || echo "Could not read application.yml"
+            echo "4. Environment Check:"
+            oc exec $LATEST_POD -- env | grep -E "SPRING|MYSQL|DATABASE|PORT"
             
-            echo "5. MySQL Logs:"
+            echo "5. MySQL Connection Test:"
             MYSQL_POD=$(oc get pods -l app=mysql -o name | head -n1)
             if [ ! -z "$MYSQL_POD" ]; then
-              echo "MySQL Pod Description:"
-              oc describe $MYSQL_POD
-              echo "MySQL Pod Logs:"
-              oc logs $MYSQL_POD | tail -n 20
-              echo "MySQL Connection Test from Pod:"
-              oc exec $MYSQL_POD -- mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "SHOW DATABASES;" || echo "Could not connect to MySQL from inside pod"
+              echo "Testing MySQL Connection..."
+              oc exec $MYSQL_POD -- mysql \
+                -h127.0.0.1 \
+                -u${{ secrets.MYSQL_USERNAME }} \
+                -p${{ secrets.MYSQL_PASSWORD }} \
+                -e "SELECT DATABASE(), USER(), VERSION();" spring_artifacts || echo "Could not connect to MySQL"
             fi
             
-            echo "6. Spring Boot Debug Info:"
-            echo "Application Properties:"
-            oc exec $LATEST_POD -- ls -la /app/BOOT-INF/classes/ || echo "Could not list application files"
-            echo "Flyway Migration Files:"
-            oc exec $LATEST_POD -- ls -la /app/BOOT-INF/classes/db/migration/ || echo "Could not list migration files"
-            echo "JVM Memory:"
-            oc exec $LATEST_POD -- java -XX:+PrintFlagsFinal -version | grep -i heapsize || echo "Could not get JVM info"
+            echo "6. Resource Usage:"
+            echo "Pod Resources:"
+            oc adm top pod $LATEST_POD || echo "Resource metrics not available"
+            echo "Memory Usage:"
+            oc exec $LATEST_POD -- free -h || echo "Memory info not available"
+            echo "Disk Usage:"
+            oc exec $LATEST_POD -- df -h || echo "Disk info not available"
           fi
             
             # Try to get logs from any failed pods
