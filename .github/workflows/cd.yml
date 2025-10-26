@@ -1,7 +1,5 @@
 name: Spring Boot CD to OpenShift
 
-
-
 # Watches your CI pipeline named "Spring Boot CI"
 
 # Triggers automatically when CI completes successfully on main branch
@@ -22,24 +20,22 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
 
-
-
     # Gets your OpenShift YAML files from repository
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-     
+      
       - name: Install OpenShift CLI (oc)
         run: |
-         echo "📥 Installing OpenShift CLI..."
-         # Download and install oc CLI
-         curl -L https://mirror.openshift.com/pub/openshift-v4/clients/oc/latest/linux/oc.tar.gz -o oc.tar.gz
-         tar -xzf oc.tar.gz
-         sudo mv oc /usr/local/bin/
-         sudo chmod +x /usr/local/bin/oc
-         echo "✅ OpenShift CLI installed"
-         # Verify installation
-         oc version --client
+          echo "📥 Installing OpenShift CLI..."
+          # Download and install oc CLI
+          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/oc/latest/linux/oc.tar.gz -o oc.tar.gz
+          tar -xzf oc.tar.gz
+          sudo mv oc /usr/local/bin/
+          sudo chmod +x /usr/local/bin/oc
+          echo "✅ OpenShift CLI installed"
+          # Verify installation
+          oc version --client
 
       # Authenticates with OpenShift cluster using secrets
       - name: Log in to OpenShift
@@ -48,7 +44,8 @@ jobs:
           openshift_server_url: ${{ secrets.OPENSHIFT_SERVER_URL }}
           openshift_token: ${{ secrets.OPENSHIFT_TOKEN }}
           namespace: ${{ secrets.OPENSHIFT_PROJECT }}
-              # --- 1. Create Secrets for Both MySQL and Spring Boot ---
+
+      # --- 1. Create Secrets for Both MySQL and Spring Boot ---
       - name: Create MySQL Secrets
         run: |
           if ! oc get secret mysql-root-secret >/dev/null 2>&1; then
@@ -83,11 +80,27 @@ jobs:
         run: |
           if ! oc get deployment/mysql >/dev/null 2>&1; then
             echo "🔧 Deploying MySQL database..."
+            
+            # Create PVC first
             oc apply -f openshift/mysql/mysql-pvc.yaml
+            
+            # Apply MySQL deployment and wait for it to be ready
             oc apply -f openshift/mysql/mysql-deployment.yaml
+            echo "⏳ Waiting for MySQL deployment to be ready..."
+            oc rollout status deployment/mysql --timeout=300s
+            
+            # Create MySQL service
             oc apply -f openshift/mysql/mysql-service.yaml
-            echo "⏳ Waiting for MySQL to be ready..."
-            oc wait --for=condition=ready pod -l app=mysql --timeout=300s
+            
+            echo "⏳ Waiting for MySQL pod to be ready..."
+            # Wait for pod with correct label to be ready
+            oc wait --for=condition=ready pod -l app=mysql --timeout=300s || {
+              echo "❌ Failed waiting for MySQL pod. Checking pod status..."
+              oc get pods -l app=mysql
+              oc describe pods -l app=mysql
+              exit 1
+            }
+            
             echo "✅ MySQL is ready"
           else
             echo "✅ MySQL already deployed"
@@ -202,10 +215,10 @@ jobs:
 
           # Get deployment info
           ROUTE_URL="${{ env.ROUTE_URL }}"
-          
+           
           # Simple message
           MESSAGE="$EMOJI **Deployment $STATUS**
-          
+           
           **Repository:** ${{ github.repository }}
           **Application:** ${{ github.repository }}
           **Branch:** ${{ github.ref_name }}
@@ -214,22 +227,22 @@ jobs:
           **🌐 URL:** $ROUTE_URL
           **📊 Health:** ${{ env.HEALTH_STATUS }}
 
-          **View Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          **View Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           # Send to Discord
           curl -H "Content-Type: application/json" \
-               -X POST \
-               -d "{
-                 \"username\": \"OpenShift CD Bot\",
-                 \"embeds\": [{
-                   \"title\": \"CD Deployment - $STATUS\",
-                   \"description\": \"$MESSAGE\",
-                   \"color\": $COLOR,
-                   \"timestamp\": \"$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")\"
-                 }]
-               }" \
-               "${{ secrets.DISCORD_WEBHOOK_URL }}"
-          
+                -X POST \
+                -d "{
+                  \"username\": \"OpenShift CD Bot\",
+                  \"embeds\": [{
+                    \"title\": \"CD Deployment - $STATUS\",
+                    \"description\": \"$MESSAGE\",
+                    \"color\": $COLOR,
+                    \"timestamp\": \"$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")\"
+                  }]
+                }" \
+                "${{ secrets.DISCORD_WEBHOOK_URL }}"
+           
           echo "✅ Discord notification sent"
 
   notify-start:
@@ -240,28 +253,19 @@ jobs:
       - name: Send Start Notification
         run: |
           curl -H "Content-Type: application/json" \
-               -X POST \
-               -d '{
-                 "username": "OpenShift CD Bot",
-                 "embeds": [
-                   {
-                     "title": "🔄 Deployment Started",
-                     "description": "**Repository:** [${{ github.repository }}](${{ github.repository }})\n**Branch:** ${{ github.ref_name }}\n**Commit:** ${{ github.sha }}\n**Triggered by:** CI Pipeline Completion\n\nDeployment to OpenShift production environment is starting...",
-                     "color": 16776960,
-                     "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"
-                   }
-                 ]
-               }' \
-               "${{ secrets.DISCORD_WEBHOOK_URL }}"
-
-
-
-
-
-
-
-
-
+                -X POST \
+                -d '{
+                  "username": "OpenShift CD Bot",
+                  "embeds": [
+                    {
+                      "title": "🔄 Deployment Started",
+                      "description": "**Repository:** [${{ github.repository }}](${{ github.repository }})\n**Branch:** ${{ github.ref_name }}\n**Commit:** ${{ github.sha }}\n**Triggered by:** CI Pipeline Completion\n\nDeployment to OpenShift production environment is starting...",
+                      "color": 16776960,
+                      "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"
+                    }
+                  ]
+                }' \
+                "${{ secrets.DISCORD_WEBHOOK_URL }}"
 
 # OpenShift Cluster
 # │
