@@ -1,236 +1,243 @@
-# Monitoring Stack Setup
+# Detailed Monitoring Guide
 
-This guide explains how to set up and manage the monitoring stack (Prometheus & Grafana) for our OpenShift deployment.
+## OpenShift Built-in Monitoring Stack
 
-## Architecture Overview
+OpenShift provides a comprehensive monitoring stack that includes:
 
 ```mermaid
 graph TD
-    subgraph GitHub Actions
-        A[monitor.yml] -->|Triggers After| B[CD Pipeline Success]
-        B -->|Deploys| C[Monitoring Stack]
+    subgraph OpenShift Monitoring
+        A[Prometheus] -->|Stores| B[Time Series DB]
+        A -->|Alerts| C[Alert Manager]
+        A -->|Visualizes| D[OpenShift Console]
+        E[Thanos Ruler] -->|Long-term| B
     end
-    
-    subgraph OpenShift Monitoring Namespace
-        C -->|Creates| D[Prometheus]
-        C -->|Creates| E[Grafana]
-        D -->|Provides Data| E
+
+    subgraph Your Application
+        F[Spring Boot] -->|Exposes| G[Metrics Endpoint]
+        H[MySQL] -->|Exposes| I[Database Metrics]
     end
-    
-    subgraph Metrics Flow
-        F[Spring Boot App] -->|Exposes| G[/actuator/prometheus]
-        H[MySQL] -->|Exposes| I[MySQL Metrics]
-        G -->|Scraped by| D
-        I -->|Scraped by| D
-    end
+
+    G -->|Scraped by| A
+    I -->|Scraped by| A
 ```
 
-## Prerequisites
+## Monitoring Setup Process
 
-1. **GitHub Secrets Setup**:
-   ```bash
-   # Add these secrets to your GitHub repository
-   OPENSHIFT_SERVER_URL=<your-openshift-server>
-   OPENSHIFT_TOKEN=<your-openshift-token>
-   OPENSHIFT_PROJECT=<your-project-name>
-   GRAFANA_ADMIN_PASSWORD=<your-grafana-password>  # Choose a strong password
-   ```
-
-2. **Required Files Structure**:
-   ```plaintext
-   openshift/
-   ├── monitoring/
-   │   ├── prometheus/
-   │   │   ├── prometheus-configmap.yaml   # Prometheus configuration
-   │   │   └── prometheus-deployment.yaml  # Prometheus deployment
-   │   ├── grafana/
-   │   │   ├── grafana-deployment.yaml    # Grafana deployment
-   │   │   ├── datasources-configmap.yaml # Prometheus datasource
-   │   │   ├── dashboards-configmap.yaml  # Dashboard provider
-   │   │   └── dashboards/               # Pre-configured dashboards
-   │   │       ├── spring-boot.json      # Spring Boot metrics
-   │   │       └── mysql.json            # MySQL metrics
-   │   └── README.md                     # Setup instructions
-   └── ...
-   ```
-
-## Workflow Explanation
-
-### 1. Trigger Condition
+### 1. Enable User Workload Monitoring
 ```yaml
-on:
-  workflow_run:
-    workflows: ["Spring Boot CD to OpenShift"]
-    types:
-      - completed
-    branches:
-      - main
-```
-- Runs after CD pipeline succeeds
-- Only triggers on main branch
-
-### 2. Deployment Flow
-```mermaid
-sequenceDiagram
-    participant GH as GitHub Actions
-    participant NS as Namespace
-    participant PR as Prometheus
-    participant GF as Grafana
-    participant DC as Discord
-
-    GH->>NS: Create monitoring namespace
-    GH->>NS: Create Grafana secrets
-    GH->>PR: Deploy Prometheus
-    GH->>GF: Deploy Grafana
-    GH->>PR: Verify Prometheus
-    GH->>GF: Verify Grafana
-    GH->>DC: Send notification
+# Automatically configured by monitor.yml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-monitoring-config
+  namespace: openshift-monitoring
+data:
+  config.yaml: |
+    enableUserWorkload: true
 ```
 
-### 3. Monitoring Components
-
-#### Prometheus
-```mermaid
-graph LR
-    A[Prometheus] -->|Scrapes| B[Spring Boot Metrics]
-    A -->|Scrapes| C[MySQL Metrics]
-    A -->|Stores| D[Time Series DB]
-    A -->|Exposes| E[Query API]
+### 2. Configure Service Monitoring
+```yaml
+# servicemonitor.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: spring-boot-monitor
+spec:
+  endpoints:
+  - port: http
+    path: /actuator/prometheus
 ```
 
-#### Grafana
-```mermaid
-graph LR
-    A[Grafana] -->|Reads| B[Prometheus Data]
-    A -->|Displays| C[Dashboards]
-    A -->|Manages| D[Alerts]
-    A -->|Provides| E[UI Access]
+### 3. Application Configuration
+```xml
+<!-- pom.xml -->
+<dependency>
+    <groupId>io.micrometer</groupId>
+    <artifactId>micrometer-registry-prometheus</artifactId>
+</dependency>
 ```
 
-## Setup Instructions
+```yaml
+# application.yml
+management:
+  endpoints:
+    web:
+      exposure:
+        include: prometheus,health,info
+```
 
-1. **Add GitHub Secrets**:
-   - Go to Repository Settings
-   - Navigate to Secrets and Variables → Actions
-   - Add New Repository Secret:
-     ```plaintext
-     Name: GRAFANA_ADMIN_PASSWORD
-     Value: <your-chosen-password>
-     ```
+## Available Metrics
 
-2. **Verify Workflow**:
-   ```bash
-   # Check if monitor.yml is in place
-   .github/workflows/monitor.yml
+### 1. JVM Metrics
+```promql
+# Memory Usage
+jvm_memory_used_bytes{area="heap"}
+jvm_memory_max_bytes{area="heap"}
 
-   # Ensure monitoring files exist
-   openshift/monitoring/
-   ```
+# Thread States
+jvm_threads_states_threads{state="runnable"}
 
-3. **Deploy Manually (if needed)**:
-   ```bash
-   # Switch to monitoring namespace
-   oc new-project monitoring
+# Garbage Collection
+jvm_gc_pause_seconds_count
+```
 
-   # Deploy monitoring stack
-   oc apply -f openshift/monitoring/prometheus/
-   oc apply -f openshift/monitoring/grafana/
-   ```
+### 2. HTTP Metrics
+```promql
+# Request Rate
+rate(http_server_requests_seconds_count[5m])
 
-## Access Information
+# Error Rate
+rate(http_server_requests_seconds_count{status="500"}[5m])
 
-### Prometheus
-- URL: `http://<prometheus-route>`
-- Port: 9090
-- Features:
-  - Query Interface
-  - Target Status
-  - Alert Rules
+# Response Time
+rate(http_server_requests_seconds_sum[5m]) / rate(http_server_requests_seconds_count[5m])
+```
 
-### Grafana
-- URL: `http://<grafana-route>`
-- Port: 3000
-- Default Login:
-  ```
-  Username: admin
-  Password: <GRAFANA_ADMIN_PASSWORD>
-  ```
-- Available Dashboards:
-  1. Spring Boot Metrics
-     - HTTP Request Rate
-     - JVM Memory Usage
-     - Database Connections
-  2. MySQL Metrics
-     - Connected Threads
-     - InnoDB I/O
-     - Buffer Pool Usage
+### 3. Database Metrics
+```promql
+# Connection Pool
+hikaricp_connections_active
+hikaricp_connections_max
 
-## Troubleshooting
+# MySQL Specific
+mysql_global_status_threads_connected
+mysql_global_status_bytes_received
+```
 
-### Common Issues
+## Monitoring in OpenShift Console
 
-1. **Prometheus Can't Scrape Metrics**:
-   ```bash
-   # Check target status
-   oc exec <prometheus-pod> -- curl localhost:9090/api/v1/targets
-   ```
+### 1. Accessing Metrics
+- Navigate to: Administrator → Monitoring → Metrics
+- Use the Query Builder or enter PromQL
+- Adjust time range as needed
 
-2. **Grafana Can't Connect to Prometheus**:
-   ```bash
-   # Verify Prometheus service
-   oc get svc prometheus
-   ```
+### 2. Creating Dashboards
+- Go to: Administrator → Monitoring → Dashboards
+- Create custom dashboards
+- Import existing ones
 
-3. **Dashboard Not Loading**:
-   ```bash
-   # Check Grafana logs
-   oc logs <grafana-pod>
-   ```
+### 3. Setting Up Alerts
+- Access: Administrator → Monitoring → Alerting
+- Create alert rules
+- Configure alert receivers
 
-### Debug Commands
+## Adding New Services
+
+### 1. Preparation
 ```bash
-# Check pod status
-oc get pods -n monitoring
+# Verify service has metrics endpoint
+curl http://service:8081/actuator/prometheus
 
-# Check routes
-oc get routes -n monitoring
-
-# View Prometheus config
-oc get configmap prometheus-config -o yaml
-
-# View Grafana datasources
-oc get configmap grafana-datasources -o yaml
+# Check service labels
+oc get service my-service --show-labels
 ```
 
-## Maintenance
-
-### Updating Passwords
-```bash
-# Update GitHub Secret
-1. Go to GitHub Repository Settings
-2. Update GRAFANA_ADMIN_PASSWORD
-
-# Manual update if needed
-oc create secret generic grafana-secrets \
-  --from-literal=admin-user=admin \
-  --from-literal=admin-password=<new-password> \
-  -n monitoring --dry-run=client -o yaml | oc replace -f -
+### 2. Create ServiceMonitor
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: new-service-monitor
+spec:
+  selector:
+    matchLabels:
+      app: new-service
+  endpoints:
+  - port: http
+    path: /actuator/prometheus
 ```
 
-### Backup
+### 3. Verify Setup
 ```bash
-# Backup Grafana dashboards
-oc exec <grafana-pod> -- curl -X GET http://localhost:3000/api/dashboards/uid/<dashboard-uid>
+# Check ServiceMonitor status
+oc get servicemonitor
 
-# Backup Prometheus rules
-oc get configmap prometheus-config -o yaml > prometheus-backup.yaml
+# Verify metrics collection
+oc exec <pod> -- curl localhost:8081/actuator/prometheus
 ```
 
-### Scaling
-```bash
-# Scale Prometheus
-oc scale deployment prometheus --replicas=2
+## Troubleshooting Guide
 
-# Scale Grafana
-oc scale deployment grafana --replicas=2
+### 1. Metrics Not Showing
+```bash
+# Check ServiceMonitor
+oc describe servicemonitor <name>
+
+# Verify metrics endpoint
+oc exec <pod> -- curl localhost:8081/actuator/prometheus
+
+# Check OpenShift monitoring
+oc get pods -n openshift-monitoring
+```
+
+### 2. Common Issues
+- Metrics endpoint not exposed
+- Wrong port configuration
+- Missing service labels
+- RBAC issues
+
+### 3. Debug Commands
+```bash
+# Check monitoring stack
+oc get pods -n openshift-monitoring
+
+# View ServiceMonitor logs
+oc logs -n openshift-monitoring <prometheus-pod>
+
+# Check RBAC
+oc get clusterrole monitoring-rules-view
+```
+
+## Best Practices
+
+### 1. Metrics
+- Use consistent naming
+- Add relevant labels
+- Document custom metrics
+- Keep cardinality in check
+
+### 2. Alerts
+- Set appropriate thresholds
+- Add clear descriptions
+- Configure proper severity
+- Avoid alert fatigue
+
+### 3. Resource Usage
+- Monitor memory usage
+- Track CPU utilization
+- Watch disk I/O
+- Set resource limits
+
+## Quick Reference
+
+### Common PromQL Queries
+```promql
+# Application Health
+up{job="spring-boot"}
+
+# Error Rate
+sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+
+# Memory Usage
+sum(jvm_memory_used_bytes{area="heap"}) / sum(jvm_memory_max_bytes{area="heap"}) * 100
+
+# Response Time
+histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le))
+```
+
+### Useful Commands
+```bash
+# Check monitoring status
+oc get pods -n openshift-monitoring
+
+# View metrics
+oc exec <pod> -- curl localhost:8081/actuator/prometheus
+
+# Check ServiceMonitor
+oc get servicemonitor
+
+# View alerts
+oc get prometheusrule
 ```

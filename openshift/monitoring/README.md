@@ -1,194 +1,167 @@
-# Monitoring Setup for OpenShift
+# OpenShift Monitoring Setup
 
-This directory contains the monitoring setup for our OpenShift deployment using Prometheus and Grafana.
+This guide explains how to use OpenShift's built-in monitoring capabilities for our Spring Boot application.
 
-## Quick Start
+## Architecture Overview
 
-```bash
-# 1. Create monitoring namespace
-oc new-project monitoring
+```mermaid
+graph TD
+    A[Spring Boot App] -->|Exposes| B[/actuator/prometheus]
+    B -->|Scraped by| C[OpenShift Prometheus]
+    C -->|Stores| D[Time Series Data]
+    C -->|Alerts| E[Alert Manager]
+    C -->|Visualizes| F[OpenShift Console]
 
-# 2. Deploy Prometheus
-oc apply -f prometheus/
-
-# 3. Deploy Grafana
-oc apply -f grafana/
-
-# 4. Get Grafana route
-oc get route grafana
+    subgraph OpenShift Built-in Monitoring
+        C
+        D
+        E
+        F
+    end
 ```
 
 ## Components
 
-### Prometheus
-- Metrics collection
-- Data storage
-- Query interface
-- Alert management
-
-### Grafana
-- Visualization
-- Dashboards
-- Alerting
-- User management
-
-## Architecture
-
-```mermaid
-graph TD
-    subgraph Applications
-        A[Spring Boot App] -->|Exposes| B[/actuator/prometheus]
-        C[MySQL] -->|Exposes| D[MySQL Metrics]
-    end
-    
-    subgraph Monitoring Stack
-        E[Prometheus Server] -->|Scrapes| B
-        E -->|Scrapes| D
-        E -->|Data Source| F[Grafana]
-        F -->|Displays| G[Dashboards]
-    end
-    
-    subgraph Access
-        H[OpenShift Route] -->|External Access| F
-    end
-```
-
-## Configuration
-
-### Prometheus
-
-```yaml
-# Key configurations in prometheus-configmap.yaml
-scrape_configs:
-  - job_name: 'spring-boot'
-    metrics_path: '/actuator/prometheus'
-    kubernetes_sd_configs:
-      - role: pod
-    relabel_configs:
-      - source_labels: [__meta_kubernetes_pod_label_app]
-        regex: spring-boot-app
-        action: keep
-```
-
-### Grafana
-
-```yaml
-# Default credentials
-username: admin
-password: admin
-
-# Data source configuration
-datasources:
-  - name: Prometheus
-    type: prometheus
-    url: http://prometheus:9090
-```
-
-## Dashboards
-
-### Spring Boot Dashboard
-- JVM Metrics
-- HTTP Request Metrics
-- Database Connection Pool
-- Custom Business Metrics
-
-### MySQL Dashboard
-- Connection Stats
-- Query Performance
-- InnoDB Metrics
-- System Resources
-
-## Usage
-
-1. **Access Grafana**:
-   ```bash
-   # Get Grafana URL
-   oc get route grafana -o jsonpath='{.spec.host}'
+1. **ServiceMonitor**:
+   ```yaml
+   apiVersion: monitoring.coreos.com/v1
+   kind: ServiceMonitor
+   metadata:
+     name: spring-boot-monitor
+   spec:
+     endpoints:
+     - port: http
+       path: /actuator/prometheus
    ```
 
-2. **Import Dashboards**:
-   - Login to Grafana
-   - Go to Dashboards -> Import
-   - Select dashboard JSON from dashboards/
+2. **Spring Boot Actuator**:
+   ```yaml
+   management:
+     endpoints:
+       web:
+         exposure:
+           include: prometheus,health,info
+   ```
 
-3. **View Metrics**:
-   - Spring Boot: http://your-app/actuator/prometheus
-   - Prometheus: http://prometheus:9090
-   - Grafana: http://grafana-route
+## Accessing Metrics
 
-## Maintenance
+1. **OpenShift Console**:
+   - Navigate to: Monitoring → Metrics
+   - Use PromQL queries to view metrics
 
-### Scaling
-```bash
-# Scale Prometheus
-oc scale deployment prometheus --replicas=2
+2. **Common Queries**:
+   ```promql
+   # Request Rate
+   rate(http_server_requests_seconds_count{job="spring-boot"}[5m])
 
-# Scale Grafana
-oc scale deployment grafana --replicas=2
-```
+   # Error Rate
+   rate(http_server_requests_seconds_count{status="500"}[5m])
 
-### Updates
-```bash
-# Update Prometheus config
-oc create configmap prometheus-config --from-file=prometheus.yml -o yaml --dry-run=client | oc replace -f -
+   # JVM Memory
+   jvm_memory_used_bytes{area="heap"}
+   ```
 
-# Update Grafana
-oc set image deployment/grafana grafana=grafana/grafana:latest
-```
+## Setting Up Alerts
 
-### Backup
-```bash
-# Backup Grafana dashboards
-oc exec grafana-pod -- curl -X GET http://localhost:3000/api/dashboards/uid/your-dashboard-uid
+1. **Via OpenShift Console**:
+   - Navigate to: Monitoring → Alerting
+   - Create Alert Rules
+   - Configure Receivers
 
-# Backup Prometheus data
-oc rsync prometheus-pod:/prometheus ./prometheus-backup
-```
+2. **Common Alert Rules**:
+   - High Error Rate (>1% errors)
+   - High Latency (>1s response time)
+   - Memory Usage (>85% heap)
+   - CPU Usage (>80% utilization)
+
+## Adding New Services
+
+1. **Enable Metrics**:
+   ```xml
+   <!-- Add to pom.xml -->
+   <dependency>
+       <groupId>io.micrometer</groupId>
+       <artifactId>micrometer-registry-prometheus</artifactId>
+   </dependency>
+   ```
+
+2. **Configure Endpoints**:
+   ```yaml
+   # In application.yml
+   management:
+     endpoints:
+       web:
+         exposure:
+           include: prometheus,health,info
+   ```
+
+3. **Create ServiceMonitor**:
+   ```yaml
+   apiVersion: monitoring.coreos.com/v1
+   kind: ServiceMonitor
+   metadata:
+     name: new-service-monitor
+   spec:
+     selector:
+       matchLabels:
+         app: new-service
+     endpoints:
+     - port: http
+       path: /actuator/prometheus
+   ```
 
 ## Troubleshooting
 
-### Common Issues
-
-1. **Prometheus Not Scraping**:
+1. **Check Metrics Endpoint**:
    ```bash
-   # Check Prometheus targets
-   curl http://prometheus:9090/api/v1/targets
+   # Test metrics endpoint
+   curl http://your-service:8081/actuator/prometheus
    ```
 
-2. **Grafana Can't Connect**:
+2. **Verify ServiceMonitor**:
    ```bash
-   # Check Prometheus service
-   oc get svc prometheus
+   # Check ServiceMonitor status
+   oc get servicemonitor
+   
+   # Describe for more details
+   oc describe servicemonitor spring-boot-monitor
    ```
 
-3. **Missing Metrics**:
-   ```bash
-   # Check Spring Boot actuator
-   curl http://your-app/actuator/prometheus
-   ```
+3. **Common Issues**:
+   - Metrics endpoint not exposed
+   - Wrong port configuration
+   - Missing service labels
+   - RBAC issues
 
-### Debug Commands
+## Best Practices
+
+1. **Metrics Naming**:
+   - Use consistent naming conventions
+   - Add relevant labels
+   - Document custom metrics
+
+2. **Resource Usage**:
+   - Monitor memory usage
+   - Track CPU utilization
+   - Watch disk I/O
+
+3. **Alert Configuration**:
+   - Set appropriate thresholds
+   - Add clear descriptions
+   - Configure proper severity levels
+
+## Useful Commands
+
 ```bash
-# Check Prometheus logs
-oc logs -l app=prometheus
+# Check metrics endpoint
+oc exec <pod-name> -- curl localhost:8081/actuator/prometheus
 
-# Check Grafana logs
-oc logs -l app=grafana
+# View ServiceMonitor
+oc get servicemonitor
 
-# Check configurations
-oc describe configmap prometheus-config
+# Check OpenShift monitoring status
+oc get pods -n openshift-monitoring
+
+# View metrics in OpenShift console
+oc get route -n openshift-monitoring
 ```
-
-## Security
-
-1. **Authentication**:
-   - Grafana: OAuth integration available
-   - Prometheus: Network policies
-
-2. **Authorization**:
-   - RBAC for Prometheus
-   - Grafana organizations and teams
-
-3. **Network**:
-   - Internal services not exposed
-   - TLS for routes

@@ -1,0 +1,17 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: spring-boot-monitor
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: spring-boot-app
+  endpoints:
+  - port: http  # matches the service port name
+    path: /actuator/prometheus
+    interval: 30s
+  namespaceSelector:
+    matchNames:
+    - ${{ secrets.OPENSHIFT_PROJECT }}

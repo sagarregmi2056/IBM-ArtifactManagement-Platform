@@ -35,15 +35,18 @@ jobs:
           openshift_token: ${{ secrets.OPENSHIFT_TOKEN }}
           namespace: ${{ secrets.OPENSHIFT_PROJECT }}
 
-      - name: Create Monitoring Namespace
+      - name: Configure OpenShift Monitoring
         run: |
-          if ! oc get project monitoring >/dev/null 2>&1; then
-            echo "🔧 Creating monitoring namespace..."
-            oc new-project monitoring
-          else
-            echo "✅ Monitoring namespace exists"
-            oc project monitoring
-          fi
+          echo "🔧 Using OpenShift built-in monitoring..."
+          
+          # Enable user workload monitoring
+          oc patch configmap cluster-monitoring-config -n openshift-monitoring --type=merge --patch='{"data":{"config.yaml":"enableUserWorkload: true"}}'
+          
+          # Wait for user workload monitoring to be ready
+          echo "⏳ Waiting for monitoring operators..."
+          oc wait --for=condition=ready pod -l app.kubernetes.io/component=prometheus -n openshift-user-workload-monitoring --timeout=300s
+          
+          echo "✅ OpenShift monitoring configured"
 
       - name: Create Grafana Secrets
         run: |
@@ -56,29 +59,12 @@ jobs:
             echo "✅ Grafana secrets exist"
           fi
 
-      - name: Deploy Prometheus and Alerts
+      - name: Configure Service Monitoring
         run: |
-          echo "🚀 Deploying Prometheus..."
+          echo "🚀 Setting up service monitoring..."
+          oc apply -f openshift/monitoring/servicemonitor.yaml
           
-          # Update alert manager config with webhook URL
-          sed -i "s|\${DISCORD_WEBHOOK_URL}|${{ secrets.DISCORD_WEBHOOK_URL }}|g" openshift/monitoring/prometheus/alertmanager-config.yaml
-          
-          # Deploy Prometheus components
-          oc apply -f openshift/monitoring/prometheus/
-          
-          echo "⏳ Waiting for Prometheus deployment..."
-          oc rollout status deployment/prometheus --timeout=300s
-          
-          echo "✅ Setting up alerts..."
-          oc apply -f openshift/monitoring/prometheus/prometheus-alerts.yaml
-
-      - name: Deploy Grafana
-        run: |
-          echo "🚀 Deploying Grafana..."
-          oc apply -f openshift/monitoring/grafana/
-          
-          echo "⏳ Waiting for Grafana deployment..."
-          oc rollout status deployment/grafana --timeout=300s
+          echo "✅ Service monitoring configured"
 
       - name: Verify Monitoring Stack
         run: |
