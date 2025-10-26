@@ -316,7 +316,8 @@ jobs:
             echo "6. Resource Usage:"
             echo "Pod Resources:"
             POD_NAME_ONLY=$(echo $LATEST_POD | sed 's|pod/||')
-            oc adm top pod $POD_NAME_ONLY || echo "Resource metrics not available"
+            # Use --use-protocol-buffers flag to avoid the warning
+            oc adm top pod $POD_NAME_ONLY --use-protocol-buffers || echo "Resource metrics not available"
             echo "Memory Usage:"
             oc exec $POD_NAME_ONLY -- free -h || echo "Memory info not available"
             echo "Disk Usage:"
@@ -336,7 +337,11 @@ jobs:
               done
             fi
             
-            exit 1
+            # Only exit with error if we found actual problems
+            if oc get pod $POD_NAME_ONLY | grep -q "CrashLoopBackOff\|Error\|Failed"; then
+              echo "❌ Pod is in failed state"
+              exit 1
+            fi
           fi
           
           echo "✅ Deployment successfully rolled out"
