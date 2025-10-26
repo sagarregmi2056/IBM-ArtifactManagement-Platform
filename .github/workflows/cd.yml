@@ -324,10 +324,10 @@ jobs:
             oc exec $POD_NAME_ONLY -- df -h || echo "Disk info not available"
           fi
             
-            # Try to get logs from any failed pods
+            # Check for any failed pods
             FAILED_PODS=$(oc get pods -l deploymentconfig=spring-boot-app --field-selector status.phase!=Running -o name)
             if [ ! -z "$FAILED_PODS" ]; then
-              echo "📋 Logs from failed pods:"
+              echo "📋 Checking failed pods..."
               for pod in $FAILED_PODS; do
                 POD_NAME_ONLY=$(echo $pod | sed 's|pod/||')
                 echo "=== Logs from $POD_NAME_ONLY ==="
@@ -342,7 +342,6 @@ jobs:
               echo "❌ Pod is in failed state"
               exit 1
             fi
-          fi
           
           echo "✅ Deployment successfully rolled out"
           
@@ -432,7 +431,7 @@ jobs:
     steps:
       - name: Send Discord Notification
         run: |
-          # Set status emoji and color
+        
           if [ "${{ needs.deploy-to-openshift.result }}" == "success" ]; then
             STATUS="✅ Success"
             COLOR=3066993
