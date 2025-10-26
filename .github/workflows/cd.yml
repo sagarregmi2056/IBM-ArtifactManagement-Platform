@@ -20,11 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
 
-    # Gets your OpenShift YAML files from repository
+# Gets your OpenShift YAML files from repository
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Install OpenShift CLI (oc)
         run: |
           echo "📥 Installing OpenShift CLI..."
@@ -37,10 +37,10 @@ jobs:
           # Verify installation
           oc version --client
 
-      # Authenticates with OpenShift cluster using secrets
+# Authenticates with OpenShift cluster using secrets
       - name: Log in to OpenShift
         uses: redhat-actions/oc-login@v1
-        with: 
+        with:
           openshift_server_url: ${{ secrets.OPENSHIFT_SERVER_URL }}
           openshift_token: ${{ secrets.OPENSHIFT_TOKEN }}
           namespace: ${{ secrets.OPENSHIFT_PROJECT }}
@@ -402,19 +402,14 @@ jobs:
           SERVICE_NAME=$(oc get route spring-boot-route -o jsonpath='{.spec.to.name}')
           SERVICE_PORT=$(oc get service $SERVICE_NAME -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "8081")
           
-          # Determine protocol based on OpenShift configuration
-          if [ ! -z "$ROUTE_TLS" ]; then
-            echo "TLS configuration found, using HTTPS"
+          # Check actual route configuration
+          echo "Checking route protocol configuration..."
+          if oc get route spring-boot-route -o yaml | grep -q "tls:"; then
+            echo "🔒 TLS configuration found, using HTTPS"
             PROTOCOL="https"
           else
-            # Check if route is exposed on HTTPS by default
-            if oc get route spring-boot-route -o jsonpath='{.spec.to.kind}' | grep -q "Service"; then
-              echo "Route is exposed via Service, using HTTPS"
-              PROTOCOL="https"
-            else
-              echo "No TLS configuration found, using HTTP"
-              PROTOCOL="http"
-            fi
+            echo "🔓 Route is configured for HTTP"
+            PROTOCOL="http"
           fi
           
           # Build and validate URL
@@ -540,19 +535,13 @@ jobs:
               ROUTE_HOST="N/A"
             fi
             
-            # Check for TLS using grep
+            # Check if route has TLS configuration
             if echo "$ROUTE_CONFIG" | grep -q "tls:"; then
-              echo "🔒 TLS is configured"
+              echo "🔒 TLS is configured, using HTTPS"
               PROTOCOL="https"
             else
-              # Check if exposed via Service
-              if echo "$ROUTE_CONFIG" | grep -q "kind: Service"; then
-                echo "🔒 Route exposed via Service, using HTTPS"
-                PROTOCOL="https"
-              else
-                echo "🔓 No TLS configuration, using HTTP"
-                PROTOCOL="http"
-              fi
+              echo "🔓 Route is configured for HTTP"
+              PROTOCOL="http"
             fi
             
             # Build URL if we have a valid host
@@ -644,7 +633,7 @@ jobs:
                  }]
                }' \
                "${{ secrets.DISCORD_WEBHOOK_URL }}"
-
+          
   notify-start:
     name: Notify Deployment Start
     runs-on: ubuntu-latest
@@ -653,22 +642,22 @@ jobs:
       - name: Send Start Notification
         run: |
           curl -H "Content-Type: application/json" \
-                -X POST \
-                -d '{
-                  "username": "OpenShift CD Bot",
-                  "embeds": [
-                    {
+               -X POST \
+               -d '{
+                 "username": "OpenShift CD Bot",
+                 "embeds": [
+                   {
                     "title": "🚀 Deployment Started",
                     "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n**Commit:** `${{ github.sha }}`\n\n**🔄 Triggered by:** CI Pipeline Completion\n**🎯 Target Environment:** Production\n**📍 Namespace:** ${{ secrets.OPENSHIFT_PROJECT }}\n\n**📝 Deployment Plan:**\n• Verify/create MySQL secrets\n• Check/deploy MySQL database\n• Deploy Spring Boot application\n• Run database migrations\n• Configure routes and services\n• Verify health and connectivity",
-                    "color": 16776960,
+                     "color": 16776960,
                     "timestamp": "'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'",
                     "footer": {
                       "text": "Estimated completion time: 3-5 minutes"
                     }
-                    }
-                  ]
-                }' \
-                "${{ secrets.DISCORD_WEBHOOK_URL }}"
+                   }
+                 ]
+               }' \
+               "${{ secrets.DISCORD_WEBHOOK_URL }}"
 
 # OpenShift Cluster
 # │
