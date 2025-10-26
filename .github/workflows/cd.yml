@@ -135,6 +135,21 @@ jobs:
             
             echo "⏳ Waiting for initial deployment to be created..."
             sleep 5
+            
+            echo "⏳ Waiting for initial deployment to start..."
+            oc rollout status dc/spring-boot-app --timeout=300s || {
+              echo "❌ Initial deployment failed. Checking status..."
+              oc get dc/spring-boot-app
+              oc describe dc/spring-boot-app
+              exit 1
+            }
+          fi
+          
+          # Check if a deployment is in progress
+          DEPLOY_STATUS=$(oc get dc/spring-boot-app -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}')
+          if [ "$DEPLOY_STATUS" == "True" ]; then
+            echo "⏳ Waiting for current deployment to complete..."
+            oc rollout status dc/spring-boot-app --timeout=300s
           fi
           
           echo "🔧 Updating deployment configuration..."
@@ -149,7 +164,16 @@ jobs:
           oc set image dc/spring-boot-app spring-boot-app=${IMAGE_NAME} --record=true
           
           echo "🔄 Triggering new deployment..."
-          oc rollout latest dc/spring-boot-app
+          oc rollout latest dc/spring-boot-app || {
+            if oc get dc/spring-boot-app -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}' | grep -q "True"; then
+              echo "ℹ️ Deployment already in progress, continuing..."
+            else
+              echo "❌ Failed to trigger deployment. Checking status..."
+              oc get dc/spring-boot-app
+              oc describe dc/spring-boot-app
+              exit 1
+            fi
+          }
 
       - name: Wait for Rollout
         run: |
@@ -214,48 +238,27 @@ jobs:
     steps:
       - name: Send Discord Notification
         run: |
-          # Determine status and color
+          # Set status emoji and color
           if [ "${{ needs.deploy-to-openshift.result }}" == "success" ]; then
-            STATUS="✅ SUCCESS"
-            COLOR=65280
-            EMOJI="🎉"
+            STATUS="✅ Success"
+            COLOR=3066993
           else
-            STATUS="❌ FAILED" 
-            COLOR=16711680
-            EMOJI="💥"
+            STATUS="❌ Failed"
+            COLOR=15158332
           fi
-
-          # Get deployment info
-          ROUTE_URL="${{ env.ROUTE_URL }}"
-           
-          # Simple message
-          MESSAGE="$EMOJI **Deployment $STATUS**
-           
-          **Repository:** ${{ github.repository }}
-          **Application:** ${{ github.repository }}
-          **Branch:** ${{ github.ref_name }}
-          **Commit:** ${GITHUB_SHA:0:7}
-
-          **🌐 URL:** $ROUTE_URL
-          **📊 Health:** ${{ env.HEALTH_STATUS }}
-
-          **View Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           # Send to Discord
           curl -H "Content-Type: application/json" \
-                -X POST \
-                -d "{
-                  \"username\": \"OpenShift CD Bot\",
-                  \"embeds\": [{
-                    \"title\": \"CD Deployment - $STATUS\",
-                    \"description\": \"$MESSAGE\",
-                    \"color\": $COLOR,
-                    \"timestamp\": \"$(date -u +\"%Y-%m-%dT%H:%M:%SZ\")\"
-                  }]
-                }" \
-                "${{ secrets.DISCORD_WEBHOOK_URL }}"
-           
-          echo "✅ Discord notification sent"
+               -X POST \
+               -d '{
+                 "username": "OpenShift CD Bot",
+                 "embeds": [{
+                   "title": "'"Deployment: $STATUS"'",
+                   "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n**URL:** ${{ env.ROUTE_URL }}\n**Health:** ${{ env.HEALTH_STATUS }}",
+                   "color": '"$COLOR"'
+                 }]
+               }' \
+               "${{ secrets.DISCORD_WEBHOOK_URL }}"
 
   notify-start:
     name: Notify Deployment Start
