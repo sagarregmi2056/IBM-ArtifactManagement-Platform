@@ -128,20 +128,28 @@ jobs:
 
           echo "🚀 Deploying Spring Boot app with image: ${IMAGE_NAME}"
           
+          if ! oc get dc/spring-boot-app >/dev/null 2>&1; then
+            echo "🆕 Creating new deployment..."
+            # Create initial deployment
+            cat openshift/spring-boot-deployment.yaml | sed "s|saga99/spring-boot-service:latest|${IMAGE_NAME}|g" | oc apply -f -
+            
+            echo "⏳ Waiting for initial deployment to be created..."
+            sleep 5
+          fi
+          
+          echo "🔧 Updating deployment configuration..."
+          # Update environment variables
           oc set env dc/spring-boot-app \
             SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/spring_artifacts?createDatabaseIfNotExist=true \
             SPRING_DATASOURCE_USERNAME=${{ secrets.MYSQL_USERNAME }} \
             SPRING_DATASOURCE_PASSWORD=${{ secrets.MYSQL_PASSWORD }} \
             SERVER_PORT=8081
           
-          if oc get dc/spring-boot-app >/dev/null 2>&1; then
-            echo "🔄 Updating existing deployment..."
-            oc set image dc/spring-boot-app spring-boot-app=${IMAGE_NAME} --record=true
-            oc rollout latest dc/spring-boot-app
-          else
-            echo "🆕 Creating new deployment..."
-            cat openshift/spring-boot-deployment.yaml | sed "s|saga99/spring-boot-service:latest|${IMAGE_NAME}|g" | oc apply -f -
-          fi
+          # Update image if needed
+          oc set image dc/spring-boot-app spring-boot-app=${IMAGE_NAME} --record=true
+          
+          echo "🔄 Triggering new deployment..."
+          oc rollout latest dc/spring-boot-app
 
       - name: Wait for Rollout
         run: |
