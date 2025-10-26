@@ -385,24 +385,55 @@ jobs:
           echo "Route Configuration:"
           oc get route spring-boot-route -o yaml
           
-          # Get route details without redaction
-          ROUTE_HOST=$(oc get route spring-boot-route -o jsonpath='{.spec.host}' --allow-missing-template-keys=false)
-          ROUTE_PATH=$(oc get route spring-boot-route -o jsonpath='{.spec.path}' --allow-missing-template-keys=false)
-          ROUTE_PORT=$(oc get route spring-boot-route -o jsonpath='{.spec.port.targetPort}' --allow-missing-template-keys=false)
-          ROUTE_TLS=$(oc get route spring-boot-route -o jsonpath='{.spec.tls}' --allow-missing-template-keys=false)
+          # Get route details with proper error handling
+          echo "Getting route host..."
+          ROUTE_HOST=$(oc get route spring-boot-route -o jsonpath='{.spec.host}')
           
-          # Construct proper URL with protocol
+          echo "Getting route port..."
+          ROUTE_PORT=$(oc get route spring-boot-route -o jsonpath='{.spec.port.targetPort}')
+          
+          # Optional fields - use default values if not present
+          echo "Checking optional route configurations..."
+          ROUTE_PATH=$(oc get route spring-boot-route -o jsonpath='{.spec.path}' 2>/dev/null || echo "/")
+          ROUTE_TLS=$(oc get route spring-boot-route -o jsonpath='{.spec.tls}' 2>/dev/null || echo "")
+          
+          # Get service details
+          echo "Getting service details..."
+          SERVICE_NAME=$(oc get route spring-boot-route -o jsonpath='{.spec.to.name}')
+          SERVICE_PORT=$(oc get service $SERVICE_NAME -o jsonpath='{.spec.ports[0].port}' 2>/dev/null || echo "8081")
+          
+          # Determine protocol based on OpenShift configuration
           if [ ! -z "$ROUTE_TLS" ]; then
+            echo "TLS configuration found, using HTTPS"
             PROTOCOL="https"
           else
-            PROTOCOL="http"
+            # Check if route is exposed on HTTPS by default
+            if oc get route spring-boot-route -o jsonpath='{.spec.to.kind}' | grep -q "Service"; then
+              echo "Route is exposed via Service, using HTTPS"
+              PROTOCOL="https"
+            else
+              echo "No TLS configuration found, using HTTP"
+              PROTOCOL="http"
+            fi
           fi
           
-          # Build full URL
+          # Build and validate URL
+          echo "Building route URL..."
           FULL_URL="${PROTOCOL}://${ROUTE_HOST}"
-          if [ ! -z "$ROUTE_PATH" ]; then
+          if [ "$ROUTE_PATH" != "/" ]; then
+            echo "Adding path: ${ROUTE_PATH}"
             FULL_URL="${FULL_URL}${ROUTE_PATH}"
           fi
+          
+          # Verify URL components
+          echo "🔍 Route Details:"
+          echo "Protocol: ${PROTOCOL}"
+          echo "Host: ${ROUTE_HOST}"
+          echo "Path: ${ROUTE_PATH}"
+          echo "Port: ${ROUTE_PORT}"
+          echo "Service: ${SERVICE_NAME}"
+          echo "Service Port: ${SERVICE_PORT}"
+          echo "Full URL: ${FULL_URL}"
           
           echo "🌐 Application URL: ${FULL_URL}"
           echo "🔒 Protocol: ${PROTOCOL}"
