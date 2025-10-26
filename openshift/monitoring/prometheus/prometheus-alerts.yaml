@@ -1,0 +1,70 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: spring-boot-alerts
+  namespace: monitoring
+spec:
+  groups:
+  - name: spring-boot
+    rules:
+    # High Error Rate
+    - alert: HighErrorRate
+      expr: rate(http_server_requests_seconds_count{status="500"}[5m]) > 1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: High Error Rate
+        description: "Application is returning high number of 500 errors"
+
+    # High Memory Usage
+    - alert: HighMemoryUsage
+      expr: sum(jvm_memory_used_bytes{area="heap"}) / sum(jvm_memory_max_bytes{area="heap"}) * 100 > 85
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: High Memory Usage
+        description: "JVM memory usage is above 85%"
+
+    # High CPU Usage
+    - alert: HighCPUUsage
+      expr: process_cpu_usage > 0.85
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: High CPU Usage
+        description: "Application CPU usage is above 85%"
+
+    # Slow Response Time
+    - alert: SlowResponses
+      expr: http_server_requests_seconds_sum / http_server_requests_seconds_count > 1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: Slow Response Time
+        description: "Average response time is above 1 second"
+
+  - name: mysql
+    rules:
+    # High MySQL Connections
+    - alert: HighMySQLConnections
+      expr: mysql_global_status_threads_connected > 100
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: High MySQL Connections
+        description: "MySQL has more than 100 active connections"
+
+    # MySQL Down
+    - alert: MySQLDown
+      expr: mysql_up == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: MySQL is down
+        description: "MySQL instance is not responding"

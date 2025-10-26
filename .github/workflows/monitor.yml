@@ -1,0 +1,140 @@
+name: Setup Monitoring Stack
+
+# Trigger after CD pipeline completes successfully
+on:
+  workflow_run:
+    workflows: ["Spring Boot CD to OpenShift"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  setup-monitoring:
+    name: Deploy Prometheus & Grafana
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install OpenShift CLI
+        run: |
+          echo "📥 Installing OpenShift CLI..."
+          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/oc/latest/linux/oc.tar.gz -o oc.tar.gz
+          tar -xzf oc.tar.gz
+          sudo mv oc /usr/local/bin/
+          sudo chmod +x /usr/local/bin/oc
+          echo "✅ OpenShift CLI installed"
+      
+      - name: Log in to OpenShift
+        uses: redhat-actions/oc-login@v1
+        with:
+          openshift_server_url: ${{ secrets.OPENSHIFT_SERVER_URL }}
+          openshift_token: ${{ secrets.OPENSHIFT_TOKEN }}
+          namespace: ${{ secrets.OPENSHIFT_PROJECT }}
+
+      - name: Create Monitoring Namespace
+        run: |
+          if ! oc get project monitoring >/dev/null 2>&1; then
+            echo "🔧 Creating monitoring namespace..."
+            oc new-project monitoring
+          else
+            echo "✅ Monitoring namespace exists"
+            oc project monitoring
+          fi
+
+      - name: Create Grafana Secrets
+        run: |
+          if ! oc get secret grafana-secrets >/dev/null 2>&1; then
+            echo "🔐 Creating Grafana secrets..."
+            oc create secret generic grafana-secrets \
+              --from-literal=admin-user=admin \
+              --from-literal=admin-password=${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          else
+            echo "✅ Grafana secrets exist"
+          fi
+
+      - name: Deploy Prometheus and Alerts
+        run: |
+          echo "🚀 Deploying Prometheus..."
+          
+          # Update alert manager config with webhook URL
+          sed -i "s|\${DISCORD_WEBHOOK_URL}|${{ secrets.DISCORD_WEBHOOK_URL }}|g" openshift/monitoring/prometheus/alertmanager-config.yaml
+          
+          # Deploy Prometheus components
+          oc apply -f openshift/monitoring/prometheus/
+          
+          echo "⏳ Waiting for Prometheus deployment..."
+          oc rollout status deployment/prometheus --timeout=300s
+          
+          echo "✅ Setting up alerts..."
+          oc apply -f openshift/monitoring/prometheus/prometheus-alerts.yaml
+
+      - name: Deploy Grafana
+        run: |
+          echo "🚀 Deploying Grafana..."
+          oc apply -f openshift/monitoring/grafana/
+          
+          echo "⏳ Waiting for Grafana deployment..."
+          oc rollout status deployment/grafana --timeout=300s
+
+      - name: Verify Monitoring Stack
+        run: |
+          echo "🔍 Verifying deployments..."
+          
+          # Check Prometheus
+          PROMETHEUS_POD=$(oc get pod -l app=prometheus -o name | head -1)
+          if [ ! -z "$PROMETHEUS_POD" ]; then
+            echo "✅ Prometheus is running"
+            echo "📊 Checking Prometheus targets..."
+            oc exec $PROMETHEUS_POD -- curl -s http://localhost:9090/api/v1/targets
+          else
+            echo "❌ Prometheus not found"
+            exit 1
+          fi
+          
+          # Check Grafana
+          GRAFANA_POD=$(oc get pod -l app=grafana -o name | head -1)
+          if [ ! -z "$GRAFANA_POD" ]; then
+            echo "✅ Grafana is running"
+            echo "🔍 Checking Grafana health..."
+            oc exec $GRAFANA_POD -- curl -s http://localhost:3000/api/health
+          else
+            echo "❌ Grafana not found"
+            exit 1
+          fi
+
+      - name: Get Access URLs
+        run: |
+          echo "🌐 Access URLs:"
+          echo "Prometheus: $(oc get route prometheus -o jsonpath='{.spec.host}')"
+          echo "Grafana: $(oc get route grafana -o jsonpath='{.spec.host}')"
+          
+          # Store URLs for notification
+          echo "PROMETHEUS_URL=$(oc get route prometheus -o jsonpath='{.spec.host}')" >> $GITHUB_ENV
+          echo "GRAFANA_URL=$(oc get route grafana -o jsonpath='{.spec.host}')" >> $GITHUB_ENV
+
+      - name: Send Discord Notification
+        if: always()
+        run: |
+          if [ "${{ job.status }}" == "success" ]; then
+            STATUS="✅ Success"
+            COLOR=3066993
+          else
+            STATUS="❌ Failed"
+            COLOR=15158332
+          fi
+          
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d '{
+                 "username": "Monitoring Bot",
+                 "embeds": [{
+                   "title": "Monitoring Setup: '"$STATUS"'",
+                   "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n\n**🔍 Monitoring URLs:**\n• Prometheus: `http://${{ env.PROMETHEUS_URL }}`\n• Grafana: `http://${{ env.GRAFANA_URL }}`\n\n**📝 Default Credentials:**\n• Username: `admin`\n• Password: `${{ secrets.GRAFANA_ADMIN_PASSWORD }}`\n\n**📊 Available Dashboards:**\n• Spring Boot Metrics\n• MySQL Metrics\n• JVM Statistics",
+                   "color": '"$COLOR"'
+                 }]
+               }' \
+               "${{ secrets.DISCORD_WEBHOOK_URL }}"
