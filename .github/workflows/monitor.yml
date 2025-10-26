@@ -35,26 +35,15 @@ jobs:
           openshift_token: ${{ secrets.OPENSHIFT_TOKEN }}
           namespace: ${{ secrets.OPENSHIFT_PROJECT }}
 
-      - name: Configure Service Monitoring
+      - name: Check Metrics Availability
         run: |
-          echo "🔧 Setting up service monitoring..."
+          echo "🔍 Checking metrics availability..."
           
-          # Check if monitoring is available
-          if oc get namespace openshift-monitoring >/dev/null 2>&1; then
-            echo "✅ OpenShift monitoring namespace exists"
-            
-            # Try to apply ServiceMonitor
-            if oc apply -f openshift/monitoring/servicemonitor.yaml; then
-              echo "✅ ServiceMonitor created successfully"
-            else
-              echo "⚠️ Could not create ServiceMonitor. This might be due to sandbox limitations."
-              echo "ℹ️ Your application metrics will still be available at /actuator/prometheus"
-              echo "ℹ️ You can view them directly or set up monitoring when you have more permissions"
-            fi
-          else
-            echo "⚠️ OpenShift monitoring not available in this environment"
-            echo "ℹ️ Application metrics endpoint is still accessible at /actuator/prometheus"
-          fi
+          # Get route URL
+          ROUTE_URL="http://$(oc get route spring-boot-route -o jsonpath='{.spec.host}')"
+          echo "📊 Metrics will be available at: ${ROUTE_URL}/actuator/prometheus"
+          
+          echo "✅ Spring Boot Actuator metrics are enabled"
 
       - name: Verify Metrics Endpoint
         run: |

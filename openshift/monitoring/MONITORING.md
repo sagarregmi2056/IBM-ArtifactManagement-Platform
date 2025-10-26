@@ -213,6 +213,67 @@ oc get clusterrole monitoring-rules-view
 ## Quick Reference
 
 ### Common PromQL Queries
+
+#### 1. Application Health
+```promql
+# Application startup time
+application_ready_time_seconds
+
+# Disk Usage
+(disk_free_bytes / disk_total_bytes) * 100
+
+# CPU Usage
+process_cpu_usage
+system_cpu_usage
+```
+
+#### 2. Database Health
+```promql
+# Active Connections
+hikaricp_connections_active
+
+# Connection Pool Usage
+(hikaricp_connections_active / hikaricp_connections_max) * 100
+
+# Connection Acquisition Time
+rate(hikaricp_connections_acquire_seconds_sum[5m])
+```
+
+#### 3. HTTP Performance
+```promql
+# Request Rate
+sum(rate(http_server_requests_seconds_count[5m])) by (uri)
+
+# Error Rate
+sum(rate(http_server_requests_seconds_count{status="500"}[5m]))
+
+# Average Response Time
+rate(http_server_requests_seconds_sum[5m]) / rate(http_server_requests_seconds_count[5m])
+```
+
+#### 4. JVM Health
+```promql
+# Memory Usage
+sum(jvm_memory_used_bytes{area="heap"}) / sum(jvm_memory_max_bytes{area="heap"}) * 100
+
+# GC Time
+rate(jvm_gc_pause_seconds_sum[5m])
+
+# Thread States
+jvm_threads_states_threads{state="blocked"}
+```
+
+#### 5. System Resources
+```promql
+# Load Average
+system_load_average_1m
+
+# File Descriptors
+process_files_open_files / process_files_max_files * 100
+
+# Uptime
+process_uptime_seconds
+```
 ```promql
 # Application Health
 up{job="spring-boot"}
