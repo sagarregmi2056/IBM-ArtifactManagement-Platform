@@ -78,7 +78,7 @@ jobs:
         # Send Discord notification
       - name: Bootstrap Environment
         run: |
-          if ! oc get deployment/mysql >/dev/null 2>&1; then
+          if ! oc get dc/mysql >/dev/null 2>&1; then
             echo "🔧 Deploying MySQL database..."
             
             # Create PVC first
@@ -87,7 +87,7 @@ jobs:
             # Apply MySQL deployment and wait for it to be ready
             oc apply -f openshift/mysql/mysql-deployment.yaml
             echo "⏳ Waiting for MySQL deployment to be ready..."
-            oc rollout status deployment/mysql --timeout=300s
+            oc rollout status dc/mysql --timeout=300s
             
             # Create MySQL service
             oc apply -f openshift/mysql/mysql-service.yaml
@@ -104,6 +104,10 @@ jobs:
             echo "✅ MySQL is ready"
           else
             echo "✅ MySQL already deployed"
+            
+            # Ensure the deployment is rolled out
+            echo "⏳ Checking MySQL deployment status..."
+            oc rollout status dc/mysql --timeout=300s
           fi
 
           if ! oc get route spring-boot-route >/dev/null 2>&1; then
