@@ -68,6 +68,22 @@ jobs:
             echo "✅ MySQL application secret already exists"
           fi
 
+          echo "🔍 Verifying MySQL Setup..."
+          MYSQL_POD=$(oc get pods -l app=mysql -o name | head -n1)
+          if [ ! -z "$MYSQL_POD" ]; then
+            echo "1. Creating database if not exists..."
+            oc exec $MYSQL_POD -- mysql -uroot -p${{ secrets.MYSQL_ROOT_PASSWORD }} -e "CREATE DATABASE IF NOT EXISTS spring_artifacts;"
+            
+            echo "2. Creating/updating application user..."
+            oc exec $MYSQL_POD -- mysql -uroot -p${{ secrets.MYSQL_ROOT_PASSWORD }} -e "
+              CREATE USER IF NOT EXISTS '${{ secrets.MYSQL_USERNAME }}'@'%' IDENTIFIED BY '${{ secrets.MYSQL_PASSWORD }}';
+              GRANT ALL PRIVILEGES ON spring_artifacts.* TO '${{ secrets.MYSQL_USERNAME }}'@'%';
+              FLUSH PRIVILEGES;"
+            
+            echo "3. Verifying database access..."
+            oc exec $MYSQL_POD -- mysql -u${{ secrets.MYSQL_USERNAME }} -p${{ secrets.MYSQL_PASSWORD }} -e "USE spring_artifacts; SHOW TABLES;"
+          fi
+
       # --- 2. Deploy MySQL Database and Create Route for Spring Boot ---
         # Deploy MySQL database if it doesn't exist
         # Create route for Spring Boot if it doesn't exist
