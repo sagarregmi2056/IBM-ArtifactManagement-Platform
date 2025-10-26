@@ -31,4 +31,4 @@ management:
   endpoints:
     web:
       exposure:
-        include: "health,info,metrics,startup"
+        include: "health,info,metrics,startup,prometheus"
