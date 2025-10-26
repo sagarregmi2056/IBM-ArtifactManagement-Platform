@@ -4,6 +4,7 @@ This document explains the Continuous Deployment (CD) pipeline that deploys our 
 
 ## Architecture Overview
 
+### 1. Overall CI/CD Flow
 ```mermaid
 graph TD
     A[GitHub Repository] -->|Push to main| B[CI Pipeline]
@@ -18,6 +19,78 @@ graph TD
         G -->|Exposes| I[Spring Boot Service]
         I -->|Exposes| J[OpenShift Route]
     end
+```
+
+### 2. Deployment Components
+```mermaid
+graph LR
+    subgraph OpenShift Project
+        A[Route] -->|Exposes| B[Service]
+        B -->|Load Balances| C[DeploymentConfig]
+        C -->|Creates| D[Pods]
+        D -->|Uses| E[Secrets]
+        D -->|Mounts| F[PVC]
+        
+        subgraph Pod
+            G[Spring Boot Container]
+            H[Init Container]
+        end
+    end
+```
+
+### 3. Zero-Downtime Deployment Process
+```mermaid
+sequenceDiagram
+    participant CD as CD Pipeline
+    participant DC as DeploymentConfig
+    participant Old as Old Pod
+    participant New as New Pod
+    participant SVC as Service
+    participant RT as Route
+
+    CD->>DC: Update image
+    DC->>New: Create new pod
+    New->>New: Start application
+    New->>New: Health check
+    Note over New: Ready
+    SVC->>New: Start sending traffic
+    SVC->>Old: Drain connections
+    Old->>Old: Terminate
+    Note over Old: Removed
+```
+
+### 4. Network Architecture
+```mermaid
+graph TD
+    A[Internet] -->|HTTP/HTTPS| B[OpenShift Route]
+    B -->|Internal| C[Spring Boot Service]
+    C -->|Load Balance| D[Spring Boot Pods]
+    D -->|Internal| E[MySQL Service]
+    E -->|Internal| F[MySQL Pod]
+    
+    subgraph OpenShift Internal Network
+        C
+        D
+        E
+        F
+    end
+```
+
+### 5. Secret Management
+```mermaid
+graph TD
+    A[GitHub Secrets] -->|Used by| B[CD Pipeline]
+    B -->|Creates| C[OpenShift Secrets]
+    
+    subgraph OpenShift Secrets
+        D[mysql-root-secret]
+        E[mysql-secret]
+    end
+    
+    C -->|Creates| D
+    C -->|Creates| E
+    D -->|Used by| F[MySQL Pod]
+    E -->|Used by| G[Spring Boot Pod]
 ```
 
 ## Deployment Components
