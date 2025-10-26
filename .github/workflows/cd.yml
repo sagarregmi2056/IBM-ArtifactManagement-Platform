@@ -130,13 +130,30 @@ jobs:
           
           echo "🔄 Checking deployment status..."
           
-          # Check if there's a rollout in progress
-          ROLLOUT_STATUS=$(oc rollout status dc/spring-boot-app --watch=false 2>/dev/null)
+          # First check if deployment exists
+          if ! oc get dc/spring-boot-app >/dev/null 2>&1; then
+            echo "🆕 Creating new Spring Boot deployment..."
+            cat openshift/spring-boot-deployment.yaml | sed "s|saga99/spring-boot-service:latest|${IMAGE_NAME}|g" | oc apply -f -
+            echo "⏳ Waiting for deployment to be created..."
+            sleep 5
+          fi
+          
+          # Get current deployment status
+          echo "📋 Current deployment status:"
+          oc get dc/spring-boot-app
+          
+          # Check for in-progress rollouts
+          ROLLOUT_STATUS=$(oc rollout status dc/spring-boot-app --watch=false 2>/dev/null || true)
           if [[ $ROLLOUT_STATUS == *"in progress"* ]]; then
             echo "⏳ Found in-progress rollout, waiting for it to complete..."
             if ! oc rollout status dc/spring-boot-app --timeout=60s; then
-              echo "❌ Previous rollout stuck, attempting to cancel..."
-              oc rollout cancel dc/spring-boot-app
+              echo "❌ Previous rollout stuck, gathering information..."
+              echo "📋 Deployment events:"
+              oc get events --sort-by='.lastTimestamp' | grep spring-boot-app | tail -n 5
+              echo "📋 Pod status:"
+              oc get pods -l deploymentconfig=spring-boot-app
+              echo "❌ Cancelling stuck rollout..."
+              oc rollout cancel dc/spring-boot-app || true
               sleep 5
             fi
           fi
