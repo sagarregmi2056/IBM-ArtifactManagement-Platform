@@ -230,8 +230,24 @@ jobs:
             echo "📋 Environment Variables:"
             oc exec $LATEST_POD -- env || echo "Could not get environment variables"
             
-            echo "📋 MySQL Connection Test:"
+            echo "📋 MySQL Status Check:"
+            echo "1. MySQL Service:"
+            oc get service mysql
+            
+            echo "2. MySQL Pod Status:"
+            oc get pods -l app=mysql
+            
+            echo "3. MySQL Connection Test:"
             oc exec $LATEST_POD -- curl -v mysql:3306 || echo "Could not connect to MySQL"
+            
+            echo "4. Database Configuration:"
+            oc exec $LATEST_POD -- cat /app/BOOT-INF/classes/application.yml || echo "Could not read application.yml"
+            
+            echo "5. MySQL Logs:"
+            MYSQL_POD=$(oc get pods -l app=mysql -o name | head -n1)
+            if [ ! -z "$MYSQL_POD" ]; then
+              oc logs $MYSQL_POD | tail -n 20
+            fi
           fi
             
             # Try to get logs from any failed pods
