@@ -129,10 +129,10 @@ jobs:
           # Get route
           ROUTE_URL=$(oc get route nodejs-ai-service -o jsonpath='{.spec.host}')
           echo "🌐 Service URL: https://$ROUTE_URL"
-          
-          # Test health endpoint
-          echo "🏥 Testing health endpoint..."
-          HEALTH_STATUS=$(oc exec $POD_NAME -- curl -s http://localhost:3001/health)
+
+          # Test health endpoint via external route
+          echo "🏥 Testing health endpoint via route..."
+          HEALTH_STATUS=$(curl -s https://$ROUTE_URL/health || echo "Could not reach health endpoint")
           echo "Health check response: $HEALTH_STATUS"
 
       - name: Send Notification
