@@ -67,12 +67,12 @@ class ChatService {
             
             switch (intent) {
                 case 'ARTIFACT_SEARCH':
-                    processedData = similarArtifacts.map(art => ({
+                    processedData = similarArtifacts.map((art, index) => ({
                         name: art.payload.name,
                         version: art.payload.version,
                         type: art.payload.type,
                         description: art.payload.description,
-                        similarity: art.score
+                        relevance: Math.round(art.score * 100) + '%'  // Convert to percentage
                     }));
                     break;
 
@@ -123,7 +123,11 @@ class ChatService {
 
     async generateResponse(query, context, intent) {
         const systemPrompt = this.getSystemPrompt(intent);
-        const contextStr = JSON.stringify(context.data);
+        
+        // Format context data as a clean list for the AI
+        const formattedContext = context.data.map((item, index) => {
+            return `${index + 1}. ${item.name} (${item.version}) - ${item.type}${item.description ? `: ${item.description}` : ''}${item.relevance ? ` [${item.relevance} relevant]` : ''}`;
+        }).join('\n');
 
         const completion = await this.openai.chat.completions.create({
             model: "gpt-3.5-turbo",
@@ -134,7 +138,7 @@ class ChatService {
                 },
                 {
                     role: "user",
-                    content: `Query: ${query}\nContext: ${contextStr}`
+                    content: `User asked: "${query}"\n\nAvailable artifacts:\n${formattedContext}`
                 }
             ],
             temperature: 0.7
@@ -149,11 +153,16 @@ class ChatService {
 
     getSystemPrompt(intent) {
         const prompts = {
-            ARTIFACT_SEARCH: `You are an AI assistant helping with artifact management.
-                            The provided data contains vector search results of artifacts, ordered by relevance.
-                            Each result includes name, version, type, and description.
-                            Focus on the most relevant matches and explain why they match the query.
-                            If no exact matches are found, suggest the closest alternatives.`,
+            ARTIFACT_SEARCH: `You are a helpful assistant that explains artifacts in simple, clear language.
+                            When the user asks about artifacts, provide:
+                            1. A friendly, conversational response
+                            2. List the artifacts found with their key details
+                            3. Dont use percentages for relevance just say the relevance in the context
+                            4. Write naturally - avoid technical jargon
+                            5. If multiple matches exist, list them in order of relevance
+                            6. Dont use any other words just the context
+                            
+                            Keep responses concise and easy to understand.`,
             
             DEPLOYMENT_INFO: `You are analyzing deployment information from our vector database.
                             The data shows artifacts with their deployment timestamps and status.
