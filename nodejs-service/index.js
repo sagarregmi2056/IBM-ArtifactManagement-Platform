@@ -2,8 +2,18 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const logger = require('./src/utils/logger');
-const routes = require('./src/routes');
 
+// Check required environment variables at startup
+const requiredEnvVars = ['OPENAI_API_KEY', 'QDRANT_URL', 'QDRANT_API_KEY'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+  logger.error('Missing required environment variables:', missingVars);
+  logger.error('Available environment variables:', Object.keys(process.env).filter(key => key.startsWith('OPENAI') || key.startsWith('QDRANT')));
+  process.exit(1);
+}
+
+const routes = require('./src/routes');
 const app = express();
 
 // Middleware
