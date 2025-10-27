@@ -4,7 +4,7 @@ const embeddingService = require('../services/embeddingService');
 const vectorService = require('../services/vectorService');
 const logger = require('../utils/logger');
 
-router.post('/sync', async (req, res) => {
+router.post('/', async (req, res) => {
     try {
         // Handle both single artifact and array
         const artifacts = Array.isArray(req.body) ? req.body : [req.body];
