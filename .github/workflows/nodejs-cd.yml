@@ -70,6 +70,36 @@ jobs:
           echo "🔄 Updating container image..."
           oc set image dc/nodejs-ai-service nodejs-ai-service=${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/nodejs-ai-service:${{ github.sha }}
 
+      - name: Debug Pod Status (if deployment fails)
+        if: failure()
+        run: |
+          echo "🔍 Debugging pod status after deployment failure..."
+          
+          # Get all pods
+          echo "📊 All pods:"
+          oc get pods -l app=nodejs-ai-service
+          
+          # Get pod name
+          POD_NAME=$(oc get pods -l app=nodejs-ai-service --sort-by=.metadata.creationTimestamp -o name | tail -n1)
+          
+          if [ -n "$POD_NAME" ]; then
+            echo "📦 Pod name: $POD_NAME"
+            
+            # Describe the pod for events
+            echo "📋 Pod description:"
+            oc describe $POD_NAME || true
+            
+            # Get logs
+            echo "📋 Pod logs:"
+            oc logs $POD_NAME || true
+            
+            # Check if pod has multiple containers
+            echo "📋 Previous container logs (if exists):"
+            oc logs $POD_NAME --previous || true
+          else
+            echo "⚠️ No pods found for nodejs-ai-service"
+          fi
+
       - name: Wait for Deployment
         run: |
           echo "⏳ Waiting for deployment to be ready..."

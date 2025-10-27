@@ -23,7 +23,15 @@ spec:
               protocol: TCP
           env:
             - name: NODE_ENV
-              value: "production"
+              valueFrom:
+                configMapKeyRef:
+                  name: nodejs-ai-config
+                  key: NODE_ENV
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: nodejs-ai-config
+                  key: LOG_LEVEL
             - name: PORT
               value: "3001"
             - name: OPENAI_API_KEY
