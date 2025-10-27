@@ -213,9 +213,36 @@ jobs:
           fi
           
           echo "🔄 Updating deployment configuration..."
+          
+          # First ensure replicas is set to 1
+          echo "📈 Setting replicas to 1..."
+          oc patch dc/spring-boot-app -p '{"spec":{"replicas":1}}'
+          
           # Update the image and add resource limits
           echo "🚀 Updating container image and configuration"
           oc patch dc/spring-boot-app -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"spring-boot-app\",\"image\":\"${IMAGE_NAME}\",\"resources\":{\"limits\":{\"cpu\":\"500m\",\"memory\":\"512Mi\"},\"requests\":{\"cpu\":\"200m\",\"memory\":\"256Mi\"}},\"readinessProbe\":{\"httpGet\":{\"path\":\"/actuator/health\",\"port\":8081},\"initialDelaySeconds\":30,\"periodSeconds\":10,\"timeoutSeconds\":5},\"livenessProbe\":{\"httpGet\":{\"path\":\"/actuator/health\",\"port\":8081},\"initialDelaySeconds\":60,\"periodSeconds\":20}}]}}}}"
+          
+          # Verify replicas setting
+          echo "🔍 Verifying deployment config..."
+          REPLICAS=$(oc get dc/spring-boot-app -o jsonpath='{.spec.replicas}')
+          if [ "$REPLICAS" -eq 0 ]; then
+            echo "⚠️ Replicas still set to 0, forcing update..."
+            oc scale dc/spring-boot-app --replicas=1
+            
+            echo "⏳ Waiting for scale up..."
+            sleep 10
+            
+            # Verify scale up
+            NEW_REPLICAS=$(oc get dc/spring-boot-app -o jsonpath='{.spec.replicas}')
+            if [ "$NEW_REPLICAS" -eq 0 ]; then
+              echo "❌ Failed to scale up deployment"
+              echo "📋 Current deployment config:"
+              oc get dc/spring-boot-app -o yaml
+              exit 1
+            fi
+          fi
+          
+          echo "👥 Current replicas setting: $NEW_REPLICAS"
           
           # Then update environment variables
           echo "🔧 Setting environment variables..."
