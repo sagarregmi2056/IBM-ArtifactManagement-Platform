@@ -213,9 +213,9 @@ jobs:
           fi
           
           echo "🔄 Updating deployment configuration..."
-          # Update the image first
-          echo "🚀 Updating container image to: ${IMAGE_NAME}"
-          oc patch dc/spring-boot-app -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"spring-boot-app\",\"image\":\"${IMAGE_NAME}\"}]}}}}"
+          # Update the image and add resource limits
+          echo "🚀 Updating container image and configuration"
+          oc patch dc/spring-boot-app -p "{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"spring-boot-app\",\"image\":\"${IMAGE_NAME}\",\"resources\":{\"limits\":{\"cpu\":\"500m\",\"memory\":\"512Mi\"},\"requests\":{\"cpu\":\"200m\",\"memory\":\"256Mi\"}},\"readinessProbe\":{\"httpGet\":{\"path\":\"/actuator/health\",\"port\":8081},\"initialDelaySeconds\":30,\"periodSeconds\":10,\"timeoutSeconds\":5},\"livenessProbe\":{\"httpGet\":{\"path\":\"/actuator/health\",\"port\":8081},\"initialDelaySeconds\":60,\"periodSeconds\":20}}]}}}}"
           
           # Then update environment variables
           echo "🔧 Setting environment variables..."
@@ -409,8 +409,56 @@ jobs:
         run: |
           echo "⏳ Waiting for rollout to complete..."
           oc rollout status dc/spring-boot-app --timeout=600s
-          echo "🔍 Waiting for application to be fully ready..."
-          oc wait --for=condition=ready pod -l app=spring-boot-app --timeout=300s
+
+          echo "🔍 Verifying deployment..."
+          # Wait for new pods to be created
+          sleep 10
+          
+          echo "📊 Checking pod status..."
+          POD_STATUS=$(oc get pods -l deploymentconfig=spring-boot-app)
+          echo "$POD_STATUS"
+          
+          if [ -z "$POD_STATUS" ]; then
+            echo "❌ No pods found. Checking deployment config..."
+            oc get dc/spring-boot-app -o yaml
+            
+            echo "📋 Checking events..."
+            oc get events --sort-by='.lastTimestamp' | tail -n 20
+            
+            echo "🔄 Forcing new deployment..."
+            oc rollout latest dc/spring-boot-app
+            sleep 10
+          fi
+          
+          # Get the latest pod
+          LATEST_POD=$(oc get pods -l deploymentconfig=spring-boot-app --sort-by=.metadata.creationTimestamp -o name | tail -n1)
+          
+          if [ -z "$LATEST_POD" ]; then
+            echo "❌ Still no pods created. Deployment failed."
+            exit 1
+          fi
+          
+          echo "⏳ Waiting for pod to be ready..."
+          if ! oc wait --for=condition=ready pod ${LATEST_POD#pod/} --timeout=300s; then
+            echo "❌ Pod failed to become ready. Checking logs..."
+            oc logs ${LATEST_POD#pod/}
+            echo "📋 Pod description:"
+            oc describe ${LATEST_POD}
+            exit 1
+          fi
+          
+          echo "✅ Pod is ready. Checking application health..."
+          sleep 10
+          
+          # Verify application is responding
+          if ! oc exec ${LATEST_POD#pod/} -- curl -s http://localhost:8081/actuator/health; then
+            echo "❌ Application health check failed"
+            echo "📋 Application logs:"
+            oc logs ${LATEST_POD#pod/}
+            exit 1
+          fi
+          
+          echo "✅ Application is healthy"
 
       - name: Verify Deployment
         run: |
