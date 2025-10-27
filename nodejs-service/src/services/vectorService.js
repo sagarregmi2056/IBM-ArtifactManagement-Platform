@@ -9,10 +9,15 @@ class VectorService {
         });
         
         this.collectionName = 'artifacts';
-        this.initializeCollection();
+        this.initialized = false;
+        // Don't initialize on startup, wait for first use
     }
 
-    async initializeCollection() {
+    async ensureInitialized() {
+        if (this.initialized) {
+            return;
+        }
+
         try {
             const collections = await this.client.getCollections();
             const exists = collections.collections.some(c => c.name === this.collectionName);
@@ -27,6 +32,7 @@ class VectorService {
                 });
                 logger.info('Collection created successfully');
             }
+            this.initialized = true;
         } catch (error) {
             logger.error('Error initializing collection:', error);
             throw new Error('Failed to initialize vector collection: ' + error.message);
@@ -35,6 +41,8 @@ class VectorService {
 
     async upsertVector(id, vector, payload) {
         try {
+            await this.ensureInitialized();
+            
             logger.debug(`Upserting vector for ID: ${id}`);
             
             await this.client.upsert(this.collectionName, {
@@ -57,6 +65,8 @@ class VectorService {
 
     async searchSimilar(vector, limit = 5) {
         try {
+            await this.ensureInitialized();
+            
             logger.debug(`Searching similar vectors, limit: ${limit}`);
             
             const results = await this.client.search(this.collectionName, {
