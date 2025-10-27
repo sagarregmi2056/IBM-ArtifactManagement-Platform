@@ -163,14 +163,10 @@ jobs:
             oc rollout status dc/mysql --timeout=300s
           fi
 
-          if ! oc get route spring-boot-route >/dev/null 2>&1; then
-            echo "🔧 Creating Spring Boot services..."
-            oc apply -f openshift/spring-boot-service.yaml
-            oc apply -f openshift/spring-boot-route.yaml
-            echo "✅ Spring Boot services created"
-          else
-            echo "✅ Spring Boot services already exist"
-          fi
+          echo "🔧 Creating/updating Spring Boot services..."
+          oc apply -f openshift/spring-boot-service.yaml
+          oc apply -f openshift/spring-boot-route.yaml
+          echo "✅ Spring Boot services updated"
 
       # --- 3. Deploy Spring Boot Application ---
       - name: Deploy Spring Boot Application
