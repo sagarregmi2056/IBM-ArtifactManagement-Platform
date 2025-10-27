@@ -44,3 +44,33 @@ jobs:
       - name: Push Docker image
         run: |
           docker push ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/nodejs-ai-service:${{ github.sha }}
+
+      - name: Send Success Notification
+        if: success()
+        run: |
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d '{
+                 "username": "nodejs-ai-service CI Bot",
+                 "embeds": [{
+                   "title": "✅ Node.js AI Service CI: Success",
+                   "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n**Commit:** [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})\n\n**📦 Docker Image:**\n`${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/nodejs-ai-service:${{ github.sha }}`\n\n**✅ Build completed successfully!**",
+                   "color": "3066993"
+                 }]
+               }' \
+               "${{ secrets.DISCORD_WEBHOOK_URL }}"
+
+      - name: Send Failure Notification
+        if: failure()
+        run: |
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d '{
+                 "username": "nodejs-ai-service CI Bot",
+                 "embeds": [{
+                   "title": "❌ Node.js AI Service CI: Failed",
+                   "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n**Commit:** [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})\n\n**❌ Build failed. Please check the logs.**\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})",
+                   "color": "15158332"
+                 }]
+               }' \
+               "${{ secrets.DISCORD_WEBHOOK_URL }}"

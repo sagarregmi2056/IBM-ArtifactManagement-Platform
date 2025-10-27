@@ -734,7 +734,7 @@ jobs:
           curl -H "Content-Type: application/json" \
                -X POST \
                -d '{
-                 "username": "OpenShift CD Bot",
+                 "username": "Spring Boot Service CD Bot",
                  "embeds": [{
                    "title": "'"Deployment: $STATUS"'",
                    "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n**Commit:** `${{ github.sha }}`\n\n**🌐 Application URL:** `'"$FULL_URL"'`\n**🏥 Health Status:** `'"$HEALTH_STATUS"'`\n**🔄 Response Code:** `'"$RESPONSE_CODE"'`\n\n**📊 Pod Status:** `'"$POD_STATUS"'`\n**💻 CPU Usage:** `'"$CPU_USAGE"'`\n**💾 Memory Usage:** `'"$MEMORY_USAGE"'`\n\n**📝 Deployment Notes:**\n• Spring Boot application is running on port 8081\n• MySQL database is connected and migrations are complete\n• Health checks are passing\n• Monitoring endpoints are available at /actuator/*\n\n**🔗 Quick Links:**\n• Health Check: `'"$FULL_URL"'/actuator/health`\n• Metrics: `'"$FULL_URL"'/actuator/metrics`\n• Info: `'"$FULL_URL"'/actuator/info`",
@@ -756,7 +756,7 @@ jobs:
           curl -H "Content-Type: application/json" \
                -X POST \
                -d '{
-                 "username": "OpenShift CD Bot",
+                 "username": "Spring Boot Service CD Bot",
                  "embeds": [
                    {
                     "title": "🚀 Deployment Started",

@@ -99,10 +99,10 @@ jobs:
             --arg status "$STATUS" \
             --argjson color "$COLOR" \
             '{
-              username: "CI CD BOT",
+              username: "Spring Boot Service CI  BOT",
               embeds: [
                 {
-                  title: "CI Build Status",
+                  title: "Spring Boot Service CI Build Status",
                   description: "**Repository:** [\($repo)](\($repo))\n**Branch:** \($branch)\n**Commit:** \($sha)\n**Status:** \($status)\n**Workflow Run:** [View Run](\($run_url))\n**Docker Image:** `\($image)`",
                   color: $color
                 }

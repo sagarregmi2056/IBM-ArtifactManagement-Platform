@@ -145,7 +145,7 @@ jobs:
           curl -H "Content-Type: application/json" \
                -X POST \
                -d '{
-                 "username": "OpenShift CD Bot",
+                 "username": "nodejs-ai-service CD Bot",
                  "embeds": [{
                    "title": "Node.js AI Service Deployment: '"$STATUS"'",
                    "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n**Commit:** `${{ github.sha }}`\n\n**🌐 Service URL:** `https://'"$ROUTE_URL"'`\n\n**📝 Deployment Notes:**\n• Node.js AI service is running on port 3001\n• Health check endpoint: /health\n• API endpoints: /api/*",
