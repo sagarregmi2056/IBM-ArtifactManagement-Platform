@@ -55,8 +55,20 @@ router.post('/', async (req, res) => {
         }
 
         const successCount = results.filter(r => r.success).length;
-        res.json({
-            success: true,
+        const hasFailures = results.some(r => !r.success);
+        
+        // Return 207 Multi-Status if some succeeded and some failed
+        // Return 200 if all succeeded
+        // Return 500 if all failed
+        let statusCode = 200;
+        if (successCount === 0) {
+            statusCode = 500;
+        } else if (hasFailures) {
+            statusCode = 207; // Multi-Status
+        }
+        
+        res.status(statusCode).json({
+            success: !hasFailures,
             message: `Synced ${successCount}/${artifacts.length} artifacts`,
             results
         });

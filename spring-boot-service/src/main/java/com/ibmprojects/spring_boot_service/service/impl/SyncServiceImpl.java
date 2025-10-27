@@ -8,10 +8,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -33,16 +35,54 @@ public class SyncServiceImpl implements SyncService {
         log.info("Starting sync for {} artifacts", artifacts.size());
         try {
             // Send to Node.js service
-            restTemplate.postForEntity(
+            ResponseEntity<Object> response = restTemplate.postForEntity(
                     nodejsServiceUrl + "/api/sync",
                     artifacts,
-                    Map.class);
+                    Object.class);
 
-            markAsSynced(artifacts);
-            log.info("Successfully synced {} artifacts", artifacts.size());
+            // Process the response to determine which artifacts synced successfully
+            @SuppressWarnings("unchecked")
+            Map<String, Object> responseBody = (Map<String, Object>) response.getBody();
+            List<Artifact> successfullySynced = new ArrayList<>();
+            List<Artifact> failedToSync = new ArrayList<>();
+
+            if (responseBody != null && responseBody.containsKey("results")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> results = (List<Map<String, Object>>) responseBody.get("results");
+
+                for (int i = 0; i < artifacts.size() && i < results.size(); i++) {
+                    Map<String, Object> result = results.get(i);
+                    Artifact artifact = artifacts.get(i);
+
+                    Boolean success = (Boolean) result.get("success");
+                    if (Boolean.TRUE.equals(success)) {
+                        successfullySynced.add(artifact);
+                        log.debug("Artifact {} synced successfully", artifact.getId());
+                    } else {
+                        failedToSync.add(artifact);
+                        Object error = result.get("error");
+                        log.warn("Artifact {} failed to sync: {}", artifact.getId(), error);
+                    }
+                }
+            } else {
+                log.error("Unexpected response format from Node.js service");
+                return;
+            }
+
+            if (!successfullySynced.isEmpty()) {
+                markAsSynced(successfullySynced);
+                log.info("Successfully synced {}/{} artifacts",
+                        successfullySynced.size(), artifacts.size());
+            }
+
+            if (!failedToSync.isEmpty()) {
+                log.warn("{} artifacts failed to sync and will be retried",
+                        failedToSync.size());
+            }
+
         } catch (Exception e) {
             log.error("Failed to sync artifacts: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to sync artifacts", e);
+
         }
     }
 
