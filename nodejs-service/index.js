@@ -20,7 +20,7 @@ app.get('/health', (req, res) => {
 
 app.get('/', (req, res) => {
   res.json({
-    status: 'Nodejs-ai  Service is running with vector search capabilities',
+    status: 'Nodejs-ai  Service is running with vector search capabilities. Now you can sync your data and search for it.',
     timestamp: new Date().toISOString()
   });
 });
