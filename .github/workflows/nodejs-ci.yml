@@ -1,0 +1,46 @@
+name: Node.js AI Service CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'nodejs-service/**'
+      - '.github/workflows/nodejs-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'nodejs-service/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        working-directory: ./nodejs-service
+        run: npm ci 
+      
+      - name: Build Docker image
+        working-directory: ./nodejs-service
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/nodejs-ai-service:$IMAGE_TAG .
+          
+      - name: Login to Docker Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY_URL }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/nodejs-ai-service:${{ github.sha }}

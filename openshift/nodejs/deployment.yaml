@@ -1,0 +1,62 @@
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  name: nodejs-ai-service
+  labels:
+    app: nodejs-ai-service
+spec:
+  replicas: 1
+  selector:
+    app: nodejs-ai-service
+    deploymentconfig: nodejs-ai-service
+  template:
+    metadata:
+      labels:
+        app: nodejs-ai-service
+        deploymentconfig: nodejs-ai-service
+    spec:
+      containers:
+        - name: nodejs-ai-service
+          image: your-registry/nodejs-ai-service:latest  # Will be replaced by CD
+          ports:
+            - containerPort: 3001
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3001"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nodejs-ai-secrets
+                  key: OPENAI_API_KEY
+            - name: QDRANT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: nodejs-ai-config
+                  key: QDRANT_URL
+            - name: QDRANT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: nodejs-ai-secrets
+                  key: QDRANT_API_KEY
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 30
+            periodSeconds: 20

@@ -1,0 +1,16 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: nodejs-ai-service
+  labels:
+    app: nodejs-ai-service
+spec:
+  port:
+    targetPort: 3001
+  to:
+    kind: Service
+    name: nodejs-ai-service
+    weight: 100
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

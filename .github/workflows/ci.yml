@@ -2,11 +2,14 @@ name: Spring Boot CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+    paths:
+      - 'spring-boot-service/**'
+      - '.github/workflows/ci.yml'
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
+    paths:
+      - 'spring-boot-service/**'
 
 env:
   IMAGE_NAME: spring-boot-service

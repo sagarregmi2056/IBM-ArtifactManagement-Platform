@@ -1,0 +1,129 @@
+name: Node.js AI Service CD
+
+on:
+  workflow_run:
+    workflows: ["Node.js AI Service CI"]
+    types:
+      - completed
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OpenShift CLI
+        run: |
+          echo "📥 Installing OpenShift CLI..."
+          curl -L https://mirror.openshift.com/pub/openshift-v4/clients/oc/latest/linux/oc.tar.gz -o oc.tar.gz
+          tar -xzf oc.tar.gz
+          sudo mv oc /usr/local/bin/
+          sudo chmod +x /usr/local/bin/oc
+
+      - name: Log in to OpenShift
+        uses: redhat-actions/oc-login@v1
+        with:
+          openshift_server_url: ${{ secrets.OPENSHIFT_SERVER_URL }}
+          openshift_token: ${{ secrets.OPENSHIFT_TOKEN }}
+          namespace: ${{ secrets.OPENSHIFT_PROJECT }}
+
+      - name: Setup ConfigMap and Secrets
+        run: |
+          echo "🔧 Creating/Updating ConfigMap..."
+          cat << EOF | oc apply -f -
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: nodejs-ai-config
+          data:
+            QDRANT_URL: "${{ secrets.QDRANT_URL }}"
+            NODE_ENV: "production"
+            LOG_LEVEL: "info"
+          EOF
+
+          echo "🔐 Creating/Updating Secrets..."
+          if ! oc get secret nodejs-ai-secrets >/dev/null 2>&1; then
+            echo "Creating new secrets..."
+            oc create secret generic nodejs-ai-secrets \
+              --from-literal=OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
+              --from-literal=QDRANT_API_KEY=${{ secrets.QDRANT_API_KEY }}
+          else
+            echo "Updating existing secrets..."
+            oc patch secret nodejs-ai-secrets --type=json -p='[
+              {"op": "replace", "path": "/data/OPENAI_API_KEY", "value":"'$(echo -n ${{ secrets.OPENAI_API_KEY }} | base64)'"},
+              {"op": "replace", "path": "/data/QDRANT_API_KEY", "value":"'$(echo -n ${{ secrets.QDRANT_API_KEY }} | base64)'"}
+            ]'
+          fi
+
+      - name: Deploy Node.js Service
+        run: |
+          echo "🚀 Deploying Node.js service..."
+          
+          # Apply all OpenShift configurations
+          oc apply -f openshift/nodejs/
+          
+          # Update the image
+          echo "🔄 Updating container image..."
+          oc set image dc/nodejs-ai-service nodejs-ai-service=${{ secrets.DOCKER_REGISTRY_URL }}/${{ secrets.DOCKER_USERNAME }}/nodejs-ai-service:${{ github.sha }}
+
+      - name: Wait for Deployment
+        run: |
+          echo "⏳ Waiting for deployment to be ready..."
+          oc rollout status dc/nodejs-ai-service --timeout=300s
+          
+          echo "⏳ Waiting for pod to be ready..."
+          oc wait --for=condition=ready pod -l app=nodejs-ai-service --timeout=300s
+
+      - name: Verify Deployment
+        run: |
+          echo "🔍 Verifying deployment..."
+          
+          # Get pod name
+          POD_NAME=$(oc get pods -l app=nodejs-ai-service --sort-by=.metadata.creationTimestamp -o name | tail -n1)
+          
+          if [ -z "$POD_NAME" ]; then
+            echo "❌ No pods found!"
+            exit 1
+          fi
+          
+          echo "📦 Pod name: $POD_NAME"
+          
+          # Check pod status
+          echo "📊 Pod status:"
+          oc get $POD_NAME -o yaml | grep phase:
+          
+          # Check logs
+          echo "📋 Recent logs:"
+          oc logs $POD_NAME --tail=50
+          
+          # Get route
+          ROUTE_URL=$(oc get route nodejs-ai-service -o jsonpath='{.spec.host}')
+          echo "🌐 Service URL: https://$ROUTE_URL"
+          
+          # Test health endpoint
+          echo "🏥 Testing health endpoint..."
+          HEALTH_STATUS=$(oc exec $POD_NAME -- curl -s http://localhost:3001/health)
+          echo "Health check response: $HEALTH_STATUS"
+
+      - name: Send Notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          COLOR=$( [ "$STATUS" == "success" ] && echo "3066993" || echo "15158332" )
+          ROUTE_URL=$(oc get route nodejs-ai-service -o jsonpath='{.spec.host}')
+          
+          curl -H "Content-Type: application/json" \
+               -X POST \
+               -d '{
+                 "username": "OpenShift CD Bot",
+                 "embeds": [{
+                   "title": "Node.js AI Service Deployment: '"$STATUS"'",
+                   "description": "**Repository:** [${{ github.repository }}](${{ github.server_url }}/${{ github.repository }})\n**Branch:** `${{ github.ref_name }}`\n**Commit:** `${{ github.sha }}`\n\n**🌐 Service URL:** `https://'"$ROUTE_URL"'`\n\n**📝 Deployment Notes:**\n• Node.js AI service is running on port 3001\n• Health check endpoint: /health\n• API endpoints: /api/*",
+                   "color": '"$COLOR"'
+                 }]
+               }' \
+               "${{ secrets.DISCORD_WEBHOOK_URL }}"
