@@ -46,18 +46,14 @@ jobs:
           EOF
 
           echo "🔐 Creating/Updating Secrets..."
-          if ! oc get secret nodejs-ai-secrets >/dev/null 2>&1; then
-            echo "Creating new secrets..."
-            oc create secret generic nodejs-ai-secrets \
-              --from-literal=OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
-              --from-literal=QDRANT_API_KEY=${{ secrets.QDRANT_API_KEY }}
-          else
-            echo "Updating existing secrets..."
-            oc patch secret nodejs-ai-secrets --type=json -p='[
-              {"op": "replace", "path": "/data/OPENAI_API_KEY", "value":"'$(echo -n ${{ secrets.OPENAI_API_KEY }} | base64)'"},
-              {"op": "replace", "path": "/data/QDRANT_API_KEY", "value":"'$(echo -n ${{ secrets.QDRANT_API_KEY }} | base64)'"}
-            ]'
-          fi
+          # Delete the secret if it exists
+          oc delete secret nodejs-ai-secrets 2>/dev/null || true
+          
+          # Create new secret with updated values
+          echo "Creating new secrets..."
+          oc create secret generic nodejs-ai-secrets \
+            --from-literal=OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
+            --from-literal=QDRANT_API_KEY=${{ secrets.QDRANT_API_KEY }}
 
       - name: Deploy Node.js Service
         run: |
