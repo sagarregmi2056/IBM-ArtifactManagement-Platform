@@ -92,6 +92,29 @@ jobs:
         # Wait for rollout to complete
         # Verify deployment
         # Send Discord notification
+      - name: Ensure MySQL is Running
+        run: |
+          echo "🔍 Checking MySQL status..."
+          if [ "$(oc get dc/mysql -o jsonpath='{.spec.replicas}')" -eq 0 ]; then
+            echo "⚠️ MySQL is scaled down, scaling up..."
+            oc scale dc/mysql --replicas=1
+            echo "⏳ Waiting for MySQL to be ready..."
+            oc wait --for=condition=ready pod -l app=mysql --timeout=300s
+            
+            # Verify MySQL is responding
+            echo "🔍 Verifying MySQL connection..."
+            MYSQL_POD=$(oc get pods -l app=mysql -o name | head -n1)
+            if [ ! -z "$MYSQL_POD" ]; then
+              echo "Testing database connection..."
+              oc exec $MYSQL_POD -- mysql \
+                -u${{ secrets.MYSQL_USERNAME }} \
+                -p${{ secrets.MYSQL_PASSWORD }} \
+                -e "SELECT 1;" spring_artifacts
+            fi
+          else
+            echo "✅ MySQL is already running"
+          fi
+
       - name: Bootstrap Environment
         run: |
           if ! oc get dc/mysql >/dev/null 2>&1; then
