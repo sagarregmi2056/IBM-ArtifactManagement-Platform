@@ -1,6 +1,5 @@
 package com.ibmprojects.spring_boot_service.controller;
 
-
 import com.ibmprojects.spring_boot_service.dto.artifact.ArtifactCreateRequest;
 import com.ibmprojects.spring_boot_service.dto.artifact.ArtifactResponse;
 import com.ibmprojects.spring_boot_service.dto.artifact.ArtifactUpdateRequest;
@@ -9,6 +8,7 @@ import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -60,6 +60,7 @@ public class ArtifactController {
             @RequestParam String version) {
         return ResponseEntity.ok(artifactService.findByNameAndVersion(name, version));
     }
+
     @ExceptionHandler(EntityNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleEntityNotFound(
             EntityNotFoundException ex,
@@ -73,5 +74,21 @@ public class ArtifactController {
         errorResponse.put("path", request.getRequestURI());
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDuplicateEntry(
+            DataIntegrityViolationException ex,
+            HttpServletRequest request) {
+
+        Map<String, Object> errorResponse = new HashMap<>();
+        errorResponse.put("timestamp", LocalDateTime.now());
+        errorResponse.put("status", HttpStatus.CONFLICT.value());
+        errorResponse.put("error", "Conflict");
+        errorResponse.put("message",
+                "An artifact with this name and version already exists. Please use a different version or update the existing artifact.");
+        errorResponse.put("path", request.getRequestURI());
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
     }
 }
