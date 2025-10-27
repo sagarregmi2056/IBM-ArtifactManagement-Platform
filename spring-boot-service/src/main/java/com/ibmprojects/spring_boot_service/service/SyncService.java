@@ -12,3 +12,4 @@ public interface SyncService {
 
     void markAsSynced(Artifact artifact);
 }
+// This interface is used to sync the artifacts to the nodejs service
