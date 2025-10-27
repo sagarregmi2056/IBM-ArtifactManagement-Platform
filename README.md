@@ -4,7 +4,7 @@
 
 ## 🚀 Live Demo
 - **Dashboard**: [Coming Soon]
-- **Spring Boot Service**: http://spring-boot-route-sagarregmi2056-dev.apps.rm1.0a51.p1.openshiftapps.com/api/v1/artifacts [completed]
+- **Spring Boot Service**: https://spring-boot-route-sagarregmi2056-dev.apps.rm1.0a51.p1.openshiftapps.com/api/v1/artifacts [completed]
 
 - **Quarkus Service**: [Coming Soon]
 - **AI Service**:https://nodejs-ai-service-sagarregmi2056-dev.apps.rm1.0a51.p1.openshiftapps.com/ [Completed]

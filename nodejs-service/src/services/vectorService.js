@@ -10,7 +10,6 @@ class VectorService {
         
         this.collectionName = 'artifacts';
         this.initialized = false;
-        // Don't initialize on startup, wait for first use
     }
 
     async ensureInitialized() {
@@ -19,6 +18,9 @@ class VectorService {
         }
 
         try {
+            logger.info(`Connecting to Qdrant at: ${process.env.QDRANT_URL}`);
+            
+         
             const collections = await this.client.getCollections();
             const exists = collections.collections.some(c => c.name === this.collectionName);
 
@@ -26,13 +28,17 @@ class VectorService {
                 logger.info('Creating artifacts collection...');
                 await this.client.createCollection(this.collectionName, {
                     vectors: {
-                        size: 1536,  // OpenAI ada-002 embedding size
+                        size: 1536,  
                         distance: 'Cosine'
                     }
                 });
-                logger.info('Collection created successfully');
+                logger.info(`✓ Collection '${this.collectionName}' created successfully`);
+            } else {
+                logger.info(`✓ Collection '${this.collectionName}' already exists`);
             }
+            
             this.initialized = true;
+            logger.info('Vector service initialized successfully');
         } catch (error) {
             logger.error('Error initializing collection:', error);
             throw new Error('Failed to initialize vector collection: ' + error.message);
@@ -41,11 +47,13 @@ class VectorService {
 
     async upsertVector(id, vector, payload) {
         try {
+         
             await this.ensureInitialized();
             
             logger.debug(`Upserting vector for ID: ${id}`);
             
             await this.client.upsert(this.collectionName, {
+                wait: true,  // Wait for operation to complete
                 points: [{
                     id: id.toString(),
                     vector,
@@ -65,6 +73,7 @@ class VectorService {
 
     async searchSimilar(vector, limit = 5) {
         try {
+          
             await this.ensureInitialized();
             
             logger.debug(`Searching similar vectors, limit: ${limit}`);
@@ -80,6 +89,17 @@ class VectorService {
         } catch (error) {
             logger.error('Error searching vectors:', error);
             throw new Error('Failed to search vectors: ' + error.message);
+        }
+    }
+
+  
+    async healthCheck() {
+        try {
+            await this.client.getCollections();
+            return true;
+        } catch (error) {
+            logger.error('Health check failed:', error);
+            return false;
         }
     }
 }

@@ -1,6 +1,5 @@
 package com.ibmprojects.spring_boot_service.dto.artifact;
 
-
 import lombok.Data;
 
 import java.time.LocalDateTime;

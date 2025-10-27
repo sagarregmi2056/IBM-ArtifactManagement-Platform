@@ -6,44 +6,59 @@ const logger = require('../utils/logger');
 
 router.post('/sync', async (req, res) => {
     try {
-        const artifact = req.body;
-        logger.info(`Processing sync request for artifact ID: ${artifact.id}`);
-
-        // Generate text for embedding
-        const text = [
-            artifact.name,
-            artifact.description,
-            artifact.type,
-            artifact.version,
-            `Created: ${artifact.createdAt}`,
-            `Updated: ${artifact.updatedAt}`,
-            `Path: ${artifact.filePath}`,
-            `Size: ${artifact.sizeBytes}`,
-            JSON.stringify(artifact.metadata)
-        ].filter(Boolean).join(' ');
+        // Handle both single artifact and array
+        const artifacts = Array.isArray(req.body) ? req.body : [req.body];
         
-        // Generate embedding
-        const embedding = await embeddingService.generateEmbedding(text);
+        logger.info(`Processing sync request for ${artifacts.length} artifact(s)`);
+        
+        const results = [];
+        
+        for (const artifact of artifacts) {
+            try {
+                // Generate text for embedding
+                const text = [
+                    artifact.name,
+                    artifact.description,
+                    artifact.type,
+                    artifact.version,
+                    `Created: ${artifact.createdAt}`,
+                    `Updated: ${artifact.updatedAt}`,
+                    `Path: ${artifact.filePath}`,
+                    `Size: ${artifact.sizeBytes}`,
+                    JSON.stringify(artifact.metadata)
+                ].filter(Boolean).join(' ');
+                
+                // Generate embedding
+                const embedding = await embeddingService.generateEmbedding(text);
 
-        // Store in vector database
-        await vectorService.upsertVector(artifact.id, embedding, {
-            ...artifact,
-            timeInfo: {
-                created: artifact.createdAt,
-                updated: artifact.updatedAt,
-                synced: new Date().toISOString()
-            },
-            stats: {
-                size: artifact.sizeBytes,
-                hasChecksum: !!artifact.checksum,
-                hasMetadata: Object.keys(artifact.metadata || {}).length > 0
+                // Store in vector database
+                await vectorService.upsertVector(artifact.id, embedding, {
+                    ...artifact,
+                    timeInfo: {
+                        created: artifact.createdAt,
+                        updated: artifact.updatedAt,
+                        synced: new Date().toISOString()
+                    },
+                    stats: {
+                        size: artifact.sizeBytes,
+                        hasChecksum: !!artifact.checksum,
+                        hasMetadata: Object.keys(artifact.metadata || {}).length > 0
+                    }
+                });
+
+                results.push({ success: true, artifactId: artifact.id });
+                logger.info(`Successfully synced artifact: ${artifact.id}`);
+            } catch (error) {
+                logger.error(`Error syncing artifact ${artifact.id}:`, error);
+                results.push({ success: false, artifactId: artifact.id, error: error.message });
             }
-        });
+        }
 
+        const successCount = results.filter(r => r.success).length;
         res.json({
             success: true,
-            message: 'Artifact synced successfully',
-            artifactId: artifact.id
+            message: `Synced ${successCount}/${artifacts.length} artifacts`,
+            results
         });
     } catch (error) {
         logger.error('Error in sync endpoint:', error);

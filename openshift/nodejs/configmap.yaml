@@ -3,6 +3,6 @@ kind: ConfigMap
 metadata:
   name: nodejs-ai-config
 data:
-  QDRANT_URL: "http://qdrant:6333"
+  QDRANT_URL: "https://f39548f7-479f-445d-959d-82044a7994e3.europe-west3-0.gcp.cloud.qdrant.io"
   NODE_ENV: "production"
   LOG_LEVEL: "info"
