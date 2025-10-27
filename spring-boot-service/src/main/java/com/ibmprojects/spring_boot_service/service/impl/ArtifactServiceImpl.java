@@ -16,12 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
-
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class ArtifactServiceImpl implements ArtifactService {
-
 
     private final ArtifactRepository artifactRepository;
 
@@ -45,7 +43,6 @@ public class ArtifactServiceImpl implements ArtifactService {
         return response;
     }
 
-
     @Override
     @Transactional(readOnly = true)
     public List<ArtifactResponse> getAllArtifacts() {
@@ -58,13 +55,11 @@ public class ArtifactServiceImpl implements ArtifactService {
                 .collect(Collectors.toList());
     }
 
-
     @Override
     public ArtifactResponse updateArtifact(Long id, ArtifactUpdateRequest request) {
         Artifact existingArtifact = artifactRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Artifact not found with id: " + id));
 
-        // Copy only allowed fields from update request
         BeanUtils.copyProperties(request, existingArtifact, "id", "createdAt", "updatedAt", "checksum");
 
         Artifact updatedArtifact = artifactRepository.save(existingArtifact);
@@ -80,7 +75,6 @@ public class ArtifactServiceImpl implements ArtifactService {
         }
         artifactRepository.deleteById(id);
     }
-
 
     @Override
     @Transactional(readOnly = true)

@@ -20,7 +20,7 @@ app.get('/health', (req, res) => {
 
 app.get('/', (req, res) => {
   res.json({
-    status: 'Nodejs Service is running',
+    status: 'Nodejs-ai  Service is running with vector search capabilities',
     timestamp: new Date().toISOString()
   });
 });
