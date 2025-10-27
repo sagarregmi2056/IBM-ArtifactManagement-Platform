@@ -32,3 +32,11 @@ management:
     web:
       exposure:
         include: "health,info,metrics,startup,prometheus"
+
+# Sync Configuration
+nodejs:
+  service:
+    url: ${NODEJS_SERVICE_URL:http://localhost:3001}
+
+sync:
+  interval: ${SYNC_INTERVAL:300000}  # 5 minutes in milliseconds

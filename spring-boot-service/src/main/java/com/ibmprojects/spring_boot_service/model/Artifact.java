@@ -1,6 +1,5 @@
 package com.ibmprojects.spring_boot_service.model;
 
-
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -13,7 +12,6 @@ import java.util.Map;
 @Entity
 @Table(name = "Artifact")
 public class Artifact {
-
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -57,4 +55,11 @@ public class Artifact {
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
+    // Add to existing Artifact.java
+    @Column(nullable = false)
+    private Boolean isSynced = false;
+
+    @Column(name = "last_sync_time")
+    private LocalDateTime lastSyncTime;
 }
