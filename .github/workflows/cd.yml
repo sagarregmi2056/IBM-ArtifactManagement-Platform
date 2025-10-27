@@ -106,10 +106,24 @@ jobs:
             MYSQL_POD=$(oc get pods -l app=mysql -o name | head -n1)
             if [ ! -z "$MYSQL_POD" ]; then
               echo "Testing database connection..."
+              # Wait a bit for MySQL to be fully ready
+              sleep 10
+              
+              echo "Testing MySQL connection..."
               oc exec $MYSQL_POD -- mysql \
+                -h127.0.0.1 \
                 -u${{ secrets.MYSQL_USERNAME }} \
                 -p${{ secrets.MYSQL_PASSWORD }} \
                 -e "SELECT 1;" spring_artifacts
+              
+              if [ $? -eq 0 ]; then
+                echo "✅ MySQL connection successful"
+              else
+                echo "❌ MySQL connection failed"
+                echo "📋 Checking MySQL logs..."
+                oc logs $MYSQL_POD
+                exit 1
+              fi
             fi
           else
             echo "✅ MySQL is already running"
