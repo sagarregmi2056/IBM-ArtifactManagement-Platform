@@ -1,11 +1,11 @@
 package com.ibmprojects.spring_boot_service.exception;
 
-
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
+// error response class
 @Data
 @AllArgsConstructor
 public class ErrorResponse {
