@@ -50,12 +50,15 @@ class VectorService {
          
             await this.ensureInitialized();
             
-            logger.debug(`Upserting vector for ID: ${id}`);
+            // Convert artifact ID to a valid numeric or UUID format
+            const pointId = typeof id === 'number' ? id : parseInt(id, 10);
+            
+            logger.debug(`Upserting vector for ID: ${pointId}`);
             
             await this.client.upsert(this.collectionName, {
                 wait: true,  // Wait for operation to complete
                 points: [{
-                    id: id.toString(),
+                    id: pointId,  // ← Use numeric ID
                     vector,
                     payload: {
                         ...payload,

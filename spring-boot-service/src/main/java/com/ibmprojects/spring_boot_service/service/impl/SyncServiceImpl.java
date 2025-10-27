@@ -38,7 +38,6 @@ public class SyncServiceImpl implements SyncService {
                     artifacts,
                     Map.class);
 
-            // Mark as synced
             markAsSynced(artifacts);
             log.info("Successfully synced {} artifacts", artifacts.size());
         } catch (Exception e) {
@@ -65,14 +64,12 @@ public class SyncServiceImpl implements SyncService {
         artifact.setLastSyncTime(LocalDateTime.now());
     }
 
-    /**
-     * Scheduled task that runs every 5 minutes to sync non-synced artifacts
-     */
-    @Scheduled(fixedRateString = "${sync.interval:300000}") // 5 minutes by default
+    // schedule for every 5 minutes to sync non-synced artifacts
+    @Scheduled(fixedRateString = "${sync.interval:300000}")
     public void scheduledSync() {
         log.info("Starting scheduled artifact sync...");
         try {
-            // Find all non-synced artifacts
+
             List<Artifact> nonSyncedArtifacts = artifactRepository.findByIsSyncedFalseOrLastSyncTimeIsNull();
 
             if (nonSyncedArtifacts.isEmpty()) {
@@ -80,7 +77,6 @@ public class SyncServiceImpl implements SyncService {
                 return;
             }
 
-            // Sync them
             syncArtifacts(nonSyncedArtifacts);
             log.info("Scheduled sync completed successfully");
         } catch (Exception e) {
