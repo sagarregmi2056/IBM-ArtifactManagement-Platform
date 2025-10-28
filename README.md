@@ -3,7 +3,7 @@
 > A cloud-native platform for managing and analyzing software artifacts, designed to compare Spring Boot and Quarkus performance on IBM's OpenShift infrastructure. This project leverages IBM technologies to deliver AI-driven insights and modern DevOps practices.
 
 ## 🚀 Live Demo
-- **Dashboard**: [Coming Soon]
+- **Dashboard**:https://ibm-artifact-management-platform.vercel.app [Completed]
 - **Spring Boot Service**: https://spring-boot-route-sagarregmi2056-dev.apps.rm1.0a51.p1.openshiftapps.com/api/v1/artifacts [completed]
 
 - **Quarkus Service**: [Coming Soon]
