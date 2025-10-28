@@ -15,7 +15,7 @@ export default function AISearch() {
         setLoading(true)
         setError('')
         try {
-            const res = await ai.post('/sync/search', { text, limit: 5 })
+            const res = await ai.post('/api/sync/search', { text, limit: 5 })
             setResults(res.data?.results || [])
         } catch (e) {
             setError(e?.message || 'Search failed')

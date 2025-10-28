@@ -5,6 +5,7 @@ import Artifacts from './pages/Artifacts.jsx'
 import AISearch from './pages/AISearch.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import History from './pages/History.jsx'
+import ChatBot from './pages/ChatBot.jsx'
 import { Content, Header, HeaderName, HeaderNavigation, HeaderMenuItem, Theme } from '@carbon/react'
 
 export default function App() {
@@ -16,6 +17,7 @@ export default function App() {
           <HeaderMenuItem as={NavLink} to="/" end>Home</HeaderMenuItem>
           <HeaderMenuItem as={NavLink} to="/artifacts">Artifacts</HeaderMenuItem>
           <HeaderMenuItem as={NavLink} to="/ai">AI Search</HeaderMenuItem>
+          <HeaderMenuItem as={NavLink} to="/chat">Chat</HeaderMenuItem>
           <HeaderMenuItem as={NavLink} to="/dashboard">Dashboard</HeaderMenuItem>
         </HeaderNavigation>
       </Header>
@@ -25,6 +27,7 @@ export default function App() {
           <Route path="/artifacts" element={<Artifacts />} />
           <Route path="/artifacts/:id/history" element={<History />} />
           <Route path="/ai" element={<AISearch />} />
+          <Route path="/chat" element={<ChatBot />} />
           <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
       </Content>
