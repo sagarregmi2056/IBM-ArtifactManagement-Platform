@@ -76,6 +76,8 @@ public class ArtifactController {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse);
     }
 
+    // for exceptional handling of duplicate entries
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, Object>> handleDuplicateEntry(
             DataIntegrityViolationException ex,

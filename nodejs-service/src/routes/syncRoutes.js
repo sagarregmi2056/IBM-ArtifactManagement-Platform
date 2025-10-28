@@ -15,7 +15,7 @@ router.post('/', async (req, res) => {
         
         for (const artifact of artifacts) {
             try {
-                // Generate text for embedding
+                // Generate text for embedding for the artifact
                 const text = [
                     artifact.name,
                     artifact.description,
@@ -28,10 +28,10 @@ router.post('/', async (req, res) => {
                     JSON.stringify(artifact.metadata)
                 ].filter(Boolean).join(' ');
                 
-                // Generate embedding
+                // Generate embedding for the text
                 const embedding = await embeddingService.generateEmbedding(text);
 
-                // Store in vector database
+                // Store in vector database for the artifact
                 await vectorService.upsertVector(artifact.id, embedding, {
                     ...artifact,
                     timeInfo: {
