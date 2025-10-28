@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { Tile, Button, TextArea, Stack, Tag } from '@carbon/react'
-import { Chat } from '@carbon/icons-react'
+import { Tile, Button, TextArea, Stack, Tag, InlineNotification } from '@carbon/react'
+import { Chat as ChatIcon, Information } from '@carbon/icons-react'
 
 const ai = axios.create({
     baseURL: import.meta.env.VITE_AI_SERVICE_URL
@@ -16,11 +16,12 @@ export default function ChatBot() {
     async function sendQuery() {
         setLoading(true)
         setError('')
+        setResponse(null)
         try {
             const res = await ai.post('/api/chat/query', { query })
             setResponse(res.data)
         } catch (e) {
-            setError(e?.message || 'Query failed')
+            setError(e?.response?.data?.error || e.message || 'Query failed')
         } finally {
             setLoading(false)
         }
@@ -28,14 +29,17 @@ export default function ChatBot() {
 
     return (
         <Stack gap={6} style={{ maxWidth: '1200px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <Chat size={32} />
-                <h1 style={{ fontSize: '2rem', fontWeight: 600 }}>AI Chat Assistant</h1>
+            <div>
+                <h1 style={{ fontSize: '1.875rem', fontWeight: 600, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <ChatIcon size={24} style={{ color: '#0f62fe' }} />
+                    AI Chat Assistant
+                </h1>
+                <p style={{ color: '#525252', fontSize: '1.125rem' }}>
+                    Ask questions about your artifacts using natural language.
+                </p>
             </div>
 
-            <p style={{ color: '#525252', marginBottom: '1rem' }}>
-                Ask questions about your artifacts using natural language. The AI will analyze your query and provide intelligent responses.
-            </p>
+            {error && <InlineNotification kind="error" title="Chat failed" subtitle={error} />}
 
             <Tile style={{ padding: '2rem' }}>
                 <TextArea
@@ -44,67 +48,67 @@ export default function ChatBot() {
                     rows={5}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Example: What are the latest deployment versions? Or: Show me artifacts related to user authentication..."
+                    placeholder="Example: What are the latest versions of the user-service? Show me deployments for the payment gateway. Who committed to the authentication module recently?"
                 />
                 <div style={{ marginTop: '1rem' }}>
-                    <Button onClick={sendQuery} disabled={loading || !query.trim()} size="lg">
-                        {loading ? 'Processing...' : 'Send'}
+                    <Button onClick={sendQuery} disabled={loading || !query.trim()} size="lg" style={{ minWidth: '140px' }}>
+                        {loading ? (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                Processing...
+                            </span>
+                        ) : (
+                            'Ask AI'
+                        )}
                     </Button>
                 </div>
             </Tile>
 
-            {error && (
-                <Tile style={{ padding: '1.5rem', backgroundColor: '#fff1f1' }}>
-                    <p style={{ color: '#da1e28' }}>{error}</p>
-                </Tile>
-            )}
-
             {response && (
                 <Tile style={{ padding: '2rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                        <Tag type="blue">{response.type?.toUpperCase() || 'RESPONSE'}</Tag>
-                        {response.totalResults !== undefined && (
-                            <Tag type="gray">{response.totalResults} results found</Tag>
-                        )}
+                        <Information size={20} />
+                        <h3 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600 }}>
+                            AI Response {response.intent && `(${response.intent.replace('_', ' ')})`}
+                        </h3>
                     </div>
 
-                    {response.answer && (
-                        <div style={{ marginBottom: '1rem', fontSize: '1.125rem' }}>
-                            {response.answer}
-                        </div>
-                    )}
+                    <div style={{ marginBottom: '1rem', fontSize: '1.125rem', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
+                        {response.response || response.answer}
+                    </div>
 
-                    {response.data && response.data.length > 0 && (
-                        <div>
-                            <h4 style={{ marginBottom: '0.75rem', fontSize: '1rem', fontWeight: 600 }}>
-                                Related Artifacts:
-                            </h4>
-                            <ul style={{ listStyle: 'none', padding: 0 }}>
-                                {response.data.map((item, idx) => (
-                                    <li key={idx} style={{
-                                        padding: '0.75rem',
-                                        marginBottom: '0.5rem',
-                                        backgroundColor: '#f4f4f4',
-                                        borderRadius: '4px'
-                                    }}>
-                                        <div style={{ fontWeight: 600 }}>{item.name}</div>
-                                        <div style={{ fontSize: '0.875rem', color: '#525252' }}>
-                                            Version: {item.version || 'N/A'} | Type: {item.type || 'N/A'}
-                                        </div>
-                                        {item.description && (
-                                            <div style={{ fontSize: '0.875rem', marginTop: '0.25rem', color: '#525252' }}>
-                                                {item.description}
+                    {response.context?.data && response.context.data.length > 0 && (
+                        <Stack gap={3}>
+                            <div style={{ borderTop: '1px solid #e0e0e0', paddingTop: '1rem' }}>
+                                <h4 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem' }}>
+                                    Relevant Artifacts ({response.context.totalResults || response.context.data.length})
+                                </h4>
+                                <Stack gap={3}>
+                                    {response.context.data.map((item, idx) => (
+                                        <Tile key={idx} style={{ padding: '1rem', backgroundColor: '#f4f4f4' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                                                <div>
+                                                    <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.25rem' }}>
+                                                        {item.name}
+                                                    </div>
+                                                    {item.description && (
+                                                        <div style={{ fontSize: '0.875rem', color: '#525252', marginBottom: '0.25rem' }}>
+                                                            {item.description}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {item.relevance && (
+                                                    <Tag type="blue">{item.relevance} match</Tag>
+                                                )}
                                             </div>
-                                        )}
-                                        {item.relevance && (
-                                            <Tag size="sm" type="green" style={{ marginTop: '0.25rem' }}>
-                                                Relevance: {item.relevance}
-                                            </Tag>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
+                                            <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: '#525252' }}>
+                                                <span><strong>Version:</strong> {item.version || 'N/A'}</span>
+                                                <span><strong>Type:</strong> {item.type || 'N/A'}</span>
+                                            </div>
+                                        </Tile>
+                                    ))}
+                                </Stack>
+                            </div>
+                        </Stack>
                     )}
                 </Tile>
             )}
