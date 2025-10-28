@@ -1,0 +1,84 @@
+name: Build and Deploy Node.js App
+
+on:
+  push:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  # Your Spring Boot Artifact API URL - UPDATE THIS!
+  ARTIFACT_API_URL: https://spring-boot-route-sagarregmi2056-dev.apps.rm1.0a51.p1.openshiftapps.com
+  
+  # S3 Configuration
+  AWS_REGION: us-east-1
+  S3_BUCKET: your-artifacts-bucket
+  
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+      
+      - name: Create distribution package
+        run: |
+          mkdir -p dist-artifacts
+          npm pack --pack-destination dist-artifacts
+          # Or create your own artifact file
+          tar -czf dist-artifacts/my-app-${{ github.run_number }}.tar.gz dist/ package.json package-lock.json
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Upload to S3
+        run: |
+          aws s3 cp dist-artifacts/my-app-${{ github.run_number }}.tar.gz \
+            s3://${{ env.S3_BUCKET }}/artifacts/my-app-${{ github.run_number }}.tar.gz \
+            --region ${{ env.AWS_REGION }}
+      
+      - name: Register artifact in IBM Artifact Management Platform
+        run: |
+          curl -X POST "${{ env.ARTIFACT_API_URL }}/api/v1/artifacts" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "my-nodejs-app",
+              "version": "1.0.${{ github.run_number }}",
+              "description": "Node.js application deployed from GitHub Actions",
+              "type": "TAR",
+              "filePath": "s3://${{ env.S3_BUCKET }}/artifacts/my-app-${{ github.run_number }}.tar.gz",
+              "repositoryUrl": "https://github.com/${{ github.repository }}",
+              "branch": "${{ github.ref_name }}",
+              "commitHash": "${{ github.sha }}",
+              "commitAuthor": "${{ github.actor }}@users.noreply.github.com",
+              "pipelineId": "github-actions-${{ github.run_id }}",
+              "buildNumber": "${{ github.run_number }}",
+              "buildStatus": "SUCCESS"
+            }'
+      
+      - name: Display registration status
+        run: |
+          echo "✅ Artifact uploaded to S3"
+          echo "✅ Artifact registered in IBM Artifact Management Platform"
+          echo "📋 View at: ${{ env.ARTIFACT_API_URL }}/api/v1/artifacts"
+
