@@ -1,18 +1,7 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import axios from 'axios'
-import { useState } from 'react'
 import {
-    DataTable,
-    Table,
-    TableHead,
-    TableRow,
-    TableHeader,
-    TableBody,
-    TableCell,
-    TextInput,
     Tile,
-    TextArea,
-    Button,
     InlineNotification,
     Stack,
     Tag,
@@ -20,7 +9,8 @@ import {
     StructuredListHead,
     StructuredListBody,
     StructuredListRow,
-    StructuredListCell
+    StructuredListCell,
+    Button
 } from '@carbon/react'
 import { useNavigate } from 'react-router-dom'
 
@@ -40,88 +30,39 @@ function useArtifacts() {
 
 export default function Artifacts() {
     const navigate = useNavigate()
-    const qc = useQueryClient()
     const { data, isLoading, error } = useArtifacts()
-    const [form, setForm] = useState({ name: '', version: '', description: '' })
-    const [toast, setToast] = useState(null)
-
-    const createMutation = useMutation({
-        mutationFn: async (payload) => {
-            const res = await api.post('/api/v1/artifacts', payload)
-            return res.data
-        },
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['artifacts'] })
-            setToast({ kind: 'success', title: 'Artifact created' })
-            setForm({ name: '', version: '', description: '' })
-        },
-        onError: (e) => {
-            setToast({ kind: 'error', title: 'Create failed', subtitle: e?.response?.data?.message || e.message })
-        }
-    })
 
     if (isLoading) return <div style={{ padding: '2rem' }}>Loading artifacts...</div>
     if (error) return <InlineNotification kind="error" title="Failed to load artifacts" subtitle={error.message} />
 
     return (
         <Stack gap={6} style={{ maxWidth: '1200px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h1 style={{ fontSize: '1.875rem', fontWeight: 600 }}>Artifacts</h1>
-                <Tag type="gray" size="lg">{data?.length || 0} items</Tag>
+            <div>
+                <h1 style={{ fontSize: '1.875rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+                    Artifacts
+                </h1>
+                <p style={{ color: '#525252', fontSize: '1.125rem' }}>
+                    View all artifacts registered from CI/CD pipelines. Click "View History" to see deployment details, commit information, and build status.
+                </p>
             </div>
 
-            {toast && (
-                <InlineNotification
-                    lowContrast
-                    kind={toast.kind}
-                    title={toast.title}
-                    subtitle={toast.subtitle}
-                    onCloseButtonClick={() => setToast(null)}
-                />
-            )}
-
-            <Tile style={{ padding: '2rem' }}>
-                <h3 style={{ marginBottom: '1.5rem', fontSize: '1.25rem', fontWeight: 600 }}>Create New Artifact</h3>
-                <Stack gap={4} style={{ maxWidth: 600 }}>
-                    <TextInput
-                        id="name"
-                        labelText="Artifact Name"
-                        value={form.name}
-                        onChange={(e) => setForm({ ...form, name: e.target.value })}
-                        placeholder="e.g., user-service"
-                    />
-                    <TextInput
-                        id="version"
-                        labelText="Version"
-                        value={form.version}
-                        onChange={(e) => setForm({ ...form, version: e.target.value })}
-                        placeholder="e.g., 1.2.3"
-                    />
-                    <TextArea
-                        id="description"
-                        labelText="Description"
-                        value={form.description}
-                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        rows={4}
-                        placeholder="Describe your artifact..."
-                    />
-                    <Button
-                        onClick={() => createMutation.mutate(form)}
-                        disabled={createMutation.isPending || !form.name || !form.version}
-                        size="lg"
-                    >
-                        {createMutation.isPending ? 'Creating...' : 'Create Artifact'}
-                    </Button>
-                </Stack>
+            <Tile style={{ padding: '1.5rem', backgroundColor: '#e8f5e9' }}>
+                <p style={{ margin: 0, fontSize: '0.875rem' }}>
+                    <strong>Note:</strong> Artifacts are automatically registered through your CI/CD pipelines. To register a new artifact, add API calls to your GitHub Actions, Tekton, or Jenkins pipeline. See the Home page for integration examples.
+                </p>
             </Tile>
 
             <div>
-                <h3 style={{ marginBottom: '1rem', fontSize: '1.125rem', fontWeight: 600 }}>
-                    All Artifacts ({data?.length || 0})
-                </h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <h3 style={{ fontSize: '1.125rem', fontWeight: 600 }}>All Artifacts</h3>
+                    <Tag type="gray" size="lg">{data?.length || 0} items</Tag>
+                </div>
+
                 {data?.length === 0 ? (
                     <Tile style={{ padding: '3rem', textAlign: 'center' }}>
-                        <p style={{ color: '#525252', fontSize: '1.125rem' }}>No artifacts yet. Create your first artifact above.</p>
+                        <p style={{ color: '#525252', fontSize: '1.125rem' }}>
+                            No artifacts found. Register your first artifact through a CI/CD pipeline.
+                        </p>
                     </Tile>
                 ) : (
                     <StructuredListWrapper>
@@ -130,6 +71,7 @@ export default function Artifacts() {
                                 <StructuredListCell head>Name</StructuredListCell>
                                 <StructuredListCell head>Version</StructuredListCell>
                                 <StructuredListCell head>Type</StructuredListCell>
+                                <StructuredListCell head>Build Status</StructuredListCell>
                                 <StructuredListCell head>Actions</StructuredListCell>
                             </StructuredListRow>
                         </StructuredListHead>
@@ -141,6 +83,15 @@ export default function Artifacts() {
                                         <Tag size="md" type="blue">{a.version}</Tag>
                                     </StructuredListCell>
                                     <StructuredListCell>{a.type || 'N/A'}</StructuredListCell>
+                                    <StructuredListCell>
+                                        {a.buildStatus ? (
+                                            <Tag size="sm" type={a.buildStatus === 'SUCCESS' ? 'green' : 'red'}>
+                                                {a.buildStatus}
+                                            </Tag>
+                                        ) : (
+                                            <span style={{ color: '#525252' }}>N/A</span>
+                                        )}
+                                    </StructuredListCell>
                                     <StructuredListCell>
                                         <Button size="sm" onClick={() => navigate(`/artifacts/${a.id}/history`)}>
                                             View History
