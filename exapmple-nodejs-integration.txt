@@ -57,13 +57,25 @@ jobs:
             s3://${{ env.S3_BUCKET }}/artifacts/my-app-${{ github.run_number }}.tar.gz \
             --region ${{ env.AWS_REGION }}
       
+      - name: Get version from package.json (or use build number)
+        id: version
+        run: |
+          # Try to get version from package.json
+          if [ -f "package.json" ]; then
+            VERSION=$(node -p "require('./package.json').version")
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          else
+            # Fallback to build number
+            echo "version=${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Register artifact in IBM Artifact Management Platform
         run: |
           curl -X POST "${{ env.ARTIFACT_API_URL }}/api/v1/artifacts" \
             -H "Content-Type: application/json" \
             -d '{
               "name": "my-nodejs-app",
-              "version": "1.0.${{ github.run_number }}",
+              "version": "${{ steps.version.outputs.version }}",
               "description": "Node.js application deployed from GitHub Actions",
               "type": "TAR",
               "filePath": "s3://${{ env.S3_BUCKET }}/artifacts/my-app-${{ github.run_number }}.tar.gz",

@@ -24,6 +24,7 @@ export default function History() {
         queryKey: ['artifact-history', id],
         queryFn: async () => {
             const res = await api.get(`/api/v1/artifacts/${id}/history`)
+            console.log('History response:', res.data)
             return res.data
         },
         enabled: !!id
@@ -126,9 +127,6 @@ export default function History() {
                                             </div>
                                         )}
                                     </div>
-                                    <Button size="sm" onClick={() => navigate(`/artifacts/${item.id}`)}>
-                                        View
-                                    </Button>
                                 </div>
                             </Tile>
                         ))}
