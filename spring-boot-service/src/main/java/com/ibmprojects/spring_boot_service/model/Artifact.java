@@ -83,4 +83,11 @@ public class Artifact {
 
     @Column(name = "build_status")
     private String buildStatus;
+
+    // GitHub profile info (optional, fetched on demand)
+    @Column(name = "author_avatar_url")
+    private String authorAvatarUrl;
+
+    @Column(name = "author_github_username")
+    private String authorGithubUsername;
 }

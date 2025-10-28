@@ -29,4 +29,8 @@ public class ArtifactResponse {
     private String pipelineId;
     private String buildNumber;
     private String buildStatus;
+
+    // GitHub profile info (optional)
+    private String authorAvatarUrl;
+    private String authorGithubUsername;
 }
