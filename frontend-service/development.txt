@@ -1,0 +1,5 @@
+///project setup
+ npx create-vite@latest frontend --template react
+
+//ibm carbon design installation
+npm install @carbon/react @carbon/icons-react @carbon/charts-react @carbon/charts axios react-router-dom @tanstack/react-query 

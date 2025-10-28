@@ -1,2 +1,14 @@
 nodejs-service/.env
 nodejs-service/.env
+node_modules
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+frontend-service/node_modules
+frontend-service/.env
+frontend-service/.env.local
+frontend-service/.env.development.local
+frontend-service/.env.test.local
+frontend-service/.env.production.local

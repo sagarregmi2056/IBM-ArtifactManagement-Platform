@@ -14,13 +14,13 @@ class ChatService {
         try {
             logger.info('Processing chat query:', query);
 
-            // Analyze query intent
+           
             const intent = await this.analyzeQueryIntent(query);
             
-            // Get relevant context based on intent
+           
             const context = await this.getQueryContext(query, intent);
 
-            // Generate response using context
+           
             const response = await this.generateResponse(query, context, intent);
 
             return response;
@@ -72,7 +72,7 @@ class ChatService {
                         version: art.payload.version,
                         type: art.payload.type,
                         description: art.payload.description,
-                        relevance: Math.round(art.score * 100) + '%'  // Convert to percentage
+                        relevance: Math.round(art.score * 100) + '%'  
                     }));
                     break;
 

@@ -30,17 +30,35 @@ public class SyncServiceImpl implements SyncService {
     @Value("${nodejs.service.url}")
     private String nodejsServiceUrl;
 
+    // 00:00:00 - Spring Boot starts
+    // - RestConfig.restTemplate() executes (ONCE)
+    // - RestTemplate bean created with custom error handler
+
+    // 00:05:00 - Scheduled sync triggered
+    // - scheduledSync() runs
+    // - Finds 3 unsynced artifacts
+    // - Calls syncArtifacts([1, 2, 3])
+    // - ↓
+    // - restTemplate.postForEntity() called
+    // - ↓
+    // - hasError() executes (checks if 500+)
+    // - If hasError() = true → handleError() executes
+    // - Response received and processed
+
+    // 00:10:00 - Scheduled sync triggered again
+    // - (same flow repeats)
+
     @Override
     public void syncArtifacts(List<Artifact> artifacts) {
         log.info("Starting sync for {} artifacts", artifacts.size());
         try {
-            // Send to Node.js service
+
             ResponseEntity<Object> response = restTemplate.postForEntity(
                     nodejsServiceUrl + "/api/sync",
                     artifacts,
                     Object.class);
 
-            // Process the response to determine which artifacts synced successfully
+           
             @SuppressWarnings("unchecked")
             Map<String, Object> responseBody = (Map<String, Object>) response.getBody();
             List<Artifact> successfullySynced = new ArrayList<>();
