@@ -1,6 +1,7 @@
 package com.ibmprojects.spring_boot_service.config;
 
-import org.springframework.beans.factory.annotation.Value;
+import lombok.Data;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
@@ -10,9 +11,10 @@ import org.springframework.web.filter.CorsFilter;
 import java.util.List;
 
 @Configuration
+@ConfigurationProperties(prefix = "cors")
+@Data
 public class CorsConfig {
 
-    @Value("${cors.allowed-origins}")
     private List<String> allowedOrigins;
 
     @Bean
@@ -21,7 +23,9 @@ public class CorsConfig {
         CorsConfiguration config = new CorsConfiguration();
 
         // Set allowed origins from application.yml
-        allowedOrigins.forEach(config::addAllowedOrigin);
+        if (allowedOrigins != null) {
+            allowedOrigins.forEach(config::addAllowedOrigin);
+        }
 
         // Allow all common HTTP methods
         config.addAllowedMethod("GET");

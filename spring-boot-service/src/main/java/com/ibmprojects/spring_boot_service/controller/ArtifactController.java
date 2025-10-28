@@ -21,11 +21,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/v1/artifacts")
 @RequiredArgsConstructor
-@CrossOrigin(origins = {
-        "https://ibm-artifact-management-platform.vercel.app",
-        "http://localhost:3000",
-        "http://localhost:5173"
-})
 public class ArtifactController {
 
     private final ArtifactService artifactService;
