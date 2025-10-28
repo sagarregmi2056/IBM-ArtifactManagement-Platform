@@ -56,10 +56,31 @@ public class Artifact {
         updatedAt = LocalDateTime.now();
     }
 
-    // Add to existing Artifact.java
+    // Sync tracking for Vector DB
     @Column(nullable = false)
     private Boolean isSynced = false;
 
     @Column(name = "last_sync_time")
     private LocalDateTime lastSyncTime;
+
+    // CI/CD Integration fields
+    @Column(name = "repository_url")
+    private String repositoryUrl;
+
+    private String branch;
+
+    @Column(name = "commit_hash")
+    private String commitHash;
+
+    @Column(name = "commit_author")
+    private String commitAuthor;
+
+    @Column(name = "pipeline_id")
+    private String pipelineId;
+
+    @Column(name = "build_number")
+    private String buildNumber;
+
+    @Column(name = "build_status")
+    private String buildStatus;
 }

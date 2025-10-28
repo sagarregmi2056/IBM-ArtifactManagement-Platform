@@ -11,4 +11,13 @@ public interface ArtifactRepository extends JpaRepository<Artifact, Long> {
 
     List<Artifact> findByIsSyncedFalseOrLastSyncTimeIsNull();
 
+    List<Artifact> findByNameOrderByCreatedAtDesc(String name);
+
+    List<Artifact> findByRepositoryUrlOrderByCreatedAtDesc(String repositoryUrl);
+
+    Optional<Artifact> findByCommitHash(String commitHash);
+
+    long count();
+
+    List<Artifact> findByBuildStatus(String buildStatus);
 }

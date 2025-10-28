@@ -13,7 +13,9 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -85,5 +87,66 @@ public class ArtifactServiceImpl implements ArtifactService {
         ArtifactResponse response = new ArtifactResponse();
         BeanUtils.copyProperties(artifact, response);
         return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ArtifactResponse> getArtifactHistoryByName(Long id) {
+        Artifact artifact = artifactRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Artifact not found with id: " + id));
+
+        List<Artifact> history = artifactRepository.findByNameOrderByCreatedAtDesc(artifact.getName());
+
+        return history.stream()
+                .map(a -> {
+                    ArtifactResponse response = new ArtifactResponse();
+                    BeanUtils.copyProperties(a, response);
+                    return response;
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ArtifactResponse> getArtifactsByRepository(String repositoryUrl) {
+        List<Artifact> artifacts = artifactRepository.findByRepositoryUrlOrderByCreatedAtDesc(repositoryUrl);
+        return artifacts.stream()
+                .map(artifact -> {
+                    ArtifactResponse response = new ArtifactResponse();
+                    BeanUtils.copyProperties(artifact, response);
+                    return response;
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ArtifactResponse getArtifactByCommitHash(String commitHash) {
+        Artifact artifact = artifactRepository.findByCommitHash(commitHash)
+                .orElseThrow(() -> new EntityNotFoundException("Artifact not found with commit hash: " + commitHash));
+        ArtifactResponse response = new ArtifactResponse();
+        BeanUtils.copyProperties(artifact, response);
+        return response;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> getArtifactStatistics() {
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalArtifacts", artifactRepository.count());
+        stats.put("successfulBuilds", artifactRepository.findByBuildStatus("SUCCESS").size());
+        stats.put("failedBuilds", artifactRepository.findByBuildStatus("FAILED").size());
+
+        List<Artifact> allArtifacts = artifactRepository.findAll();
+        Map<String, Long> byType = allArtifacts.stream()
+                .collect(Collectors.groupingBy(Artifact::getType, Collectors.counting()));
+        stats.put("artifactsByType", byType);
+
+        Map<String, Long> byRepository = allArtifacts.stream()
+                .filter(a -> a.getRepositoryUrl() != null)
+                .collect(Collectors.groupingBy(Artifact::getRepositoryUrl, Collectors.counting()));
+        stats.put("artifactsByRepository", byRepository);
+
+        return stats;
     }
 }

@@ -61,6 +61,32 @@ public class ArtifactController {
         return ResponseEntity.ok(artifactService.findByNameAndVersion(name, version));
     }
 
+    @GetMapping("/{id}/history")
+    public ResponseEntity<List<ArtifactResponse>> getArtifactHistory(@PathVariable Long id) {
+        return ResponseEntity.ok(artifactService.getArtifactHistoryByName(id));
+    }
+
+    @GetMapping("/by-repository")
+    public ResponseEntity<Map<String, Object>> getArtifactsByRepository(
+            @RequestParam String repositoryUrl) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("repositoryUrl", repositoryUrl);
+        response.put("artifacts", artifactService.getArtifactsByRepository(repositoryUrl));
+        response.put("totalCount", artifactService.getArtifactsByRepository(repositoryUrl).size());
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/by-commit-hash")
+    public ResponseEntity<ArtifactResponse> getArtifactByCommitHash(
+            @RequestParam String commitHash) {
+        return ResponseEntity.ok(artifactService.getArtifactByCommitHash(commitHash));
+    }
+
+    @GetMapping("/statistics")
+    public ResponseEntity<Map<String, Object>> getArtifactStatistics() {
+        return ResponseEntity.ok(artifactService.getArtifactStatistics());
+    }
+
     @ExceptionHandler(EntityNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleEntityNotFound(
             EntityNotFoundException ex,

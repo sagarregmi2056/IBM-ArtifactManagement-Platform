@@ -1,6 +1,5 @@
 package com.ibmprojects.spring_boot_service.dto.artifact;
 
-
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -25,4 +24,13 @@ public class ArtifactCreateRequest {
     private String filePath;
     private Long sizeBytes;
     private Map<String, Object> metadata;
+
+    // CI/CD Integration fields
+    private String repositoryUrl;
+    private String branch;
+    private String commitHash;
+    private String commitAuthor;
+    private String pipelineId;
+    private String buildNumber;
+    private String buildStatus;
 }

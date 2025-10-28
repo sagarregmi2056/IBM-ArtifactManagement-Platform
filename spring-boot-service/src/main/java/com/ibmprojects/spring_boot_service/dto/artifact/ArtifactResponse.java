@@ -20,4 +20,13 @@ public class ArtifactResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Map<String, Object> metadata;
+
+    // CI/CD Integration fields
+    private String repositoryUrl;
+    private String branch;
+    private String commitHash;
+    private String commitAuthor;
+    private String pipelineId;
+    private String buildNumber;
+    private String buildStatus;
 }

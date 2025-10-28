@@ -1,26 +1,33 @@
 import './App.css'
-import { Routes, Route, Link, NavLink } from 'react-router-dom'
+import { Routes, Route, NavLink } from 'react-router-dom'
 import Home from './pages/Home.jsx'
 import Artifacts from './pages/Artifacts.jsx'
 import AISearch from './pages/AISearch.jsx'
+import Dashboard from './pages/Dashboard.jsx'
+import History from './pages/History.jsx'
+import { Content, Header, HeaderName, HeaderNavigation, HeaderMenuItem, Theme } from '@carbon/react'
 
 export default function App() {
   return (
-    <div>
-      <header style={{ padding: '12px 16px', borderBottom: '1px solid #eee' }}>
-        <nav style={{ display: 'flex', gap: 16 }}>
-          <NavLink to="/" end>Home</NavLink>
-          <NavLink to="/artifacts">Artifacts</NavLink>
-          <NavLink to="/ai">AI Search</NavLink>
-        </nav>
-      </header>
-      <main style={{ padding: 16 }}>
+    <Theme theme="white">
+      <Header aria-label="IBM Artifact Management Platform" style={{ position: 'sticky', top: 0, zIndex: 9999 }}>
+        <HeaderName prefix="IBM">Artifact Management Platform</HeaderName>
+        <HeaderNavigation aria-label="App Navigation">
+          <HeaderMenuItem as={NavLink} to="/" end>Home</HeaderMenuItem>
+          <HeaderMenuItem as={NavLink} to="/artifacts">Artifacts</HeaderMenuItem>
+          <HeaderMenuItem as={NavLink} to="/ai">AI Search</HeaderMenuItem>
+          <HeaderMenuItem as={NavLink} to="/dashboard">Dashboard</HeaderMenuItem>
+        </HeaderNavigation>
+      </Header>
+      <Content style={{ padding: '2rem', maxWidth: '1400px', margin: '0 auto' }}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/artifacts" element={<Artifacts />} />
+          <Route path="/artifacts/:id/history" element={<History />} />
           <Route path="/ai" element={<AISearch />} />
+          <Route path="/dashboard" element={<Dashboard />} />
         </Routes>
-      </main>
-    </div>
+      </Content>
+    </Theme>
   )
 }
